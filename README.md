@@ -223,9 +223,13 @@ otherwise plot as an empty panel rather than raise.
 
 ## Environment
 
-    conda create -p ./env python=3.12 -y      # pinned interpreter
-    ./env/bin/python -m venv ./.venv          # deps, isolated
+    conda create -p ./env python=3.12 -y                     # pinned interpreter
+    conda install -p ./env -c conda-forge nodejs=22 -y        # Node LTS, same env
+    ./env/bin/python -m venv ./.venv                          # Python deps, isolated
     ./.venv/bin/pip install -r requirements.lock.txt
+    cd web && npm install
+
+Then `. scripts/env.sh` puts both on PATH for the session.
 
 Two layers, for two different reasons. The conda env is only there to pin an
 interpreter that does not belong to another project — the system python is 3.9,
@@ -235,14 +239,16 @@ disables user-site, a conda env does not.** On a shared machine with anything in
 env's own site-packages on `sys.path` and silently shadows pinned versions. The
 venv is the layer that stops it.
 
-Both live outside the repo, on scratch, alongside the lake and `node_modules` —
+Node lives in the conda layer because the venv layer has no notion of it. All of
+it sits outside the repo, on scratch, alongside the lake and `node_modules` —
 home here has an inode quota, and none of the three is worth spending it on.
 `requirements.txt` is the readable set; `requirements.lock.txt` is the pinned one.
 
 ## Run it
 
-    ./.venv/bin/python -m pytest -q
-    .venv/bin/python scripts/ingest.py --months 2023-12 2024-01
-    .venv/bin/python scripts/run.py --label baseline      # fan out + audit
-    .venv/bin/uvicorn api.main:app --reload               # the API on :8000
-    cd web && npm install && npm run dev                  # the UI on :5173
+    . scripts/env.sh
+    pytest -q
+    python scripts/ingest.py --months 2023-12 2024-01
+    python scripts/run.py --label baseline                        # fan out + audit
+    uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload    # API  :8000
+    cd web && npm run dev                                         # UI   :5173
