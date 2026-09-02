@@ -244,6 +244,43 @@ it sits outside the repo, on scratch, alongside the lake and `node_modules` —
 home here has an inode quota, and none of the three is worth spending it on.
 `requirements.txt` is the readable set; `requirements.lock.txt` is the pinned one.
 
+## Does the platform work? — the null-data self-test
+
+Every result here is a claim about a method, and the only way to check a method
+is to point it at data whose answer you already know.
+
+`scripts/null_test.py` generates panels with the statistical character of the
+real one — a common market factor, per-symbol betas, matched idiosyncratic
+volatility, Student-t innovations because real crypto returns had kurtosis 41 —
+and **no cross-sectional predictability at all**. It then runs the entire
+research path over them: universe construction → feature panel → signal DSL →
+backtest → audit. A correct platform must return nothing.
+
+Over 20 such datasets it returned nothing, 20 times. But the interesting part is
+what each lens would have concluded *on its own*:
+
+| Lens, used alone | Said yes on data with no edge |
+|---|---|
+| "Sharpe above 1.0, ship it" | **7 / 20** |
+| PBO < 0.30 | **11 / 20** |
+| Deflated Sharpe > 0.95 | 0 / 20 |
+| Reality check p < 0.05 | 0 / 20 |
+| all three together (the verdict) | 0 / 20 |
+
+The best Sharpe pure noise produced was **+2.51**, and the lowest PBO was
+**0.004** — a number that reads as a spectacular result.
+
+**PBO is the weakest lens on this trial family, and it is worth understanding
+why.** PBO measures the *stability* of selection, not the *existence* of edge.
+This grid contains every signal beside its exact negation plus nested horizons,
+so in any single realisation one direction is consistently better across the
+whole sample by luck alone — consistently enough that the in-sample winner keeps
+winning out of sample, which is exactly what a low PBO reports. It is not a
+defect in the implementation; it is what the statistic measures. The deflated
+Sharpe and the reality check are what actually did the rejecting here, and this
+is the concrete reason the platform reports four independent lenses rather than
+the one everybody quotes.
+
 ## Run it
 
     . scripts/env.sh
