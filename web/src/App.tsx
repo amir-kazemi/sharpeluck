@@ -9,6 +9,7 @@ import { AuditTable, Verdict } from "./components/Verdict";
 import { CloudTable, TrialCloud } from "./charts/TrialCloud";
 import { CostCurve, CostTable } from "./charts/CostCurve";
 import { EquityCurve, EquityTable } from "./charts/EquityCurve";
+import { TrialSpread } from "./charts/TrialSpread";
 
 function ThemeToggle() {
   const [theme, setTheme] = useState<string>(
@@ -144,12 +145,12 @@ export default function App() {
         )}
 
         {trials.data && audit.data && (
-          <Figure title="Trials"
-                  sub={`All ${trials.data.length} trials, sorted by the column selection happened on`}
-                  chart={<div className="scroll">
-                    <TrialTable trials={trials.data} winner={audit.data.winner.trial} />
-                  </div>}
-                  table={<TrialTable trials={trials.data} winner={audit.data.winner.trial} />} />
+          <Figure
+            title="Trials"
+            sub={`All ${trials.data.length} trials against the Sharpe the best of this search would reach on data with no edge`}
+            chart={<TrialSpread trials={trials.data} audit={audit.data} />}
+            table={<TrialTable trials={trials.data} winner={audit.data.winner.trial} />}
+          />
         )}
 
         <SubmitPanel onSubmitted={setSelected} />
