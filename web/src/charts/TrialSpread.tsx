@@ -22,7 +22,9 @@ export function TrialSpread({ trials, audit }: { trials: Trial[]; audit: Audit }
   const sr0 = audit.search_null.sr0_ann;
   const vals = ranked.map((t) => t.sharpe as number);
 
-  const x = linear(0, Math.max(1, ranked.length - 1), M.left, width - M.right);
+  // Half a step of inset at each end so the first and last markers do not sit
+  // on the axis line with their surface rings overlapping it.
+  const x = linear(-0.5, ranked.length - 0.5, M.left, width - M.right);
   // The benchmark is part of the story, so the scale must always contain it.
   const [ylo, yhi] = padded(Math.min(0, ...vals), Math.max(sr0, ...vals));
   const y = linear(ylo, yhi, HEIGHT - M.bottom, M.top);
