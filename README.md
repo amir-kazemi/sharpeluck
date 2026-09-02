@@ -221,10 +221,27 @@ table is itself the run's table view. `test_result_shapes_match_what_the_fronten
 pins the field names the charts consume — a renamed key in the runner would
 otherwise plot as an empty panel rather than raise.
 
+## Environment
+
+    conda create -p ./env python=3.12 -y      # pinned interpreter
+    ./env/bin/python -m venv ./.venv          # deps, isolated
+    ./.venv/bin/pip install -r requirements.lock.txt
+
+Two layers, for two different reasons. The conda env is only there to pin an
+interpreter that does not belong to another project — the system python is 3.9,
+too old for this code. The venv on top is what actually isolates: **a venv
+disables user-site, a conda env does not.** On a shared machine with anything in
+`~/.local/lib/python3.12/site-packages`, that directory sits *ahead* of a conda
+env's own site-packages on `sys.path` and silently shadows pinned versions. The
+venv is the layer that stops it.
+
+Both live outside the repo, on scratch, alongside the lake and `node_modules` —
+home here has an inode quota, and none of the three is worth spending it on.
+`requirements.txt` is the readable set; `requirements.lock.txt` is the pinned one.
+
 ## Run it
 
-    python -m venv .venv && .venv/bin/pip install -r requirements.txt
-    .venv/bin/python -m pytest -q
+    ./.venv/bin/python -m pytest -q
     .venv/bin/python scripts/ingest.py --months 2023-12 2024-01
     .venv/bin/python scripts/run.py --label baseline      # fan out + audit
     .venv/bin/uvicorn api.main:app --reload               # the API on :8000
