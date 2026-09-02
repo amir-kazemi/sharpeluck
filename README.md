@@ -188,6 +188,39 @@ dispatcher separately. Reading results is open; submitting a run costs compute
 and needs `ALPHA_AUDIT_TOKEN`. That single check is the entire authorisation
 model, deliberately — see *deliberate omissions*.
 
+## The frontend
+
+React 19 + TypeScript + Vite, TanStack Query for all server state (there is no
+global store because there is no client state worth one), deployed as a static
+bundle. 80 kB gzipped.
+
+**No chart library.** The three charts are hand-written SVG. 2px lines, >=8px
+markers each carrying a 2px ring in the surface colour, solid hairline grids,
+nearest-point hit testing with a 26px radius rather than a pinpoint dot, and a
+downsampled equity series — all of which is less code to write directly than to
+extract from a library's defaults, and it keeps the dependency tree at 42
+packages.
+
+| View | Form | Why that form |
+|---|---|---|
+| Verdict | one hero figure + stat tiles | The story is a single number — the probability the edge is real. A chart of it would be a one-bar bar chart. |
+| Trial cloud | scatter, single series | 252 CSCV splits: where the in-sample winner landed out of sample. The region below zero is shaded in neutral ink and labelled with PBO. |
+| Cost sensitivity | line, single series | Sharpe against assumed cost, with reference rules at zero and at break-even, and one direct label on the cost actually charged. |
+| Equity curve | line, two series | Gross vs net. Two series means a legend is always present; end labels appear only when the lines separate enough not to detach from them. |
+
+Palette is the validated default set: categorical slots 1 and 2 (blue, orange),
+run through the validator in both modes — all six checks pass (worst adjacent
+CVD ΔE 24.7 light / 26.8 dark against a ΔE 8 target). Dark mode is a selected
+set of steps for the dark surface, not an inversion, and an explicit theme
+choice beats the OS setting in both directions.
+
+Accessibility is structural rather than bolted on: **every chart has a table
+twin** behind a Chart/Table toggle, so no value is reachable only by hover; the
+verdict's status colour always arrives with a glyph and a word; and the trial
+table is itself the run's table view. `test_result_shapes_match_what_the_frontend_reads`
+pins the field names the charts consume — a renamed key in the runner would
+otherwise plot as an empty panel rather than raise.
+
 ## Run it
 
     python -m venv .venv && .venv/bin/pip install -r requirements.txt
@@ -195,3 +228,4 @@ model, deliberately — see *deliberate omissions*.
     .venv/bin/python scripts/ingest.py --months 2023-12 2024-01
     .venv/bin/python scripts/run.py --label baseline      # fan out + audit
     .venv/bin/uvicorn api.main:app --reload               # the API on :8000
+    cd web && npm install && npm run dev                  # the UI on :5173

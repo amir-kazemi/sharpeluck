@@ -157,8 +157,12 @@ def finalise(run_id: str, store: ResultStore) -> dict:
         "survives": bool(sn.dsr > 0.95 and pb.pbo < 0.3 and sn.rc_p_value < 0.05),
     }
     store.put_json(f"{run_id}/audit.json", report)
-    store.put_table(f"{run_id}/pbo_cloud.parquet", pl.DataFrame(
-        {"is_sharpe": cloud[:, 0], "oos_sharpe": cloud[:, 1], "logit": cloud[:, 2]}))
+    # Annualised alongside per-bar: the frontend should not have to know the
+    # bar frequency to label an axis.
+    ann = HOURS_PER_YEAR**0.5
+    store.put_table(f"{run_id}/pbo_cloud.parquet", pl.DataFrame({
+        "is_sharpe": cloud[:, 0], "oos_sharpe": cloud[:, 1], "logit": cloud[:, 2],
+        "is_sharpe_ann": cloud[:, 0] * ann, "oos_sharpe_ann": cloud[:, 1] * ann}))
     equity = wr.select(
         "ts", (1.0 + pl.col("net").fill_null(0.0)).cum_prod().alias("equity"),
         (1.0 + pl.col("gross").fill_null(0.0)).cum_prod().alias("equity_gross"))

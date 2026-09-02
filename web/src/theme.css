@@ -1,0 +1,115 @@
+/* Palette roles. Dark is a selected set of steps for the dark surface, not an
+   automatic inversion. Declared under both the media query and the data-theme
+   scope so an explicit choice wins in either direction. */
+:root {
+  color-scheme: light;
+  --surface-1: #fcfcfb;
+  --page: #f9f9f7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --good: #0ca30c;
+  --warning: #fab219;
+  --critical: #d03b3b;
+  --wash: rgba(42, 120, 214, 0.1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --wash: rgba(57, 135, 229, 0.12);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-1: #1a1a19;
+  --page: #0d0d0d;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --wash: rgba(57, 135, 229, 0.12);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text-primary);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+h1, h2, h3 { font-weight: 600; margin: 0; }
+a { color: var(--series-1); }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.card h3 { font-size: 14px; }
+.sub { color: var(--text-secondary); font-size: 12.5px; margin-top: 2px; }
+.muted { color: var(--muted); }
+
+.hero { font-size: 52px; font-weight: 600; line-height: 1.05; letter-spacing: -0.02em; }
+.tile-label { color: var(--text-secondary); font-size: 12px; }
+.tile-value { font-size: 24px; font-weight: 600; margin-top: 2px; }
+
+button, select, input, textarea {
+  font: inherit;
+  color: inherit;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 10px;
+}
+button { cursor: pointer; }
+button:hover { border-color: var(--axis); }
+button[aria-pressed="true"] { background: var(--wash); border-color: var(--series-1); }
+button:disabled { cursor: not-allowed; opacity: 0.55; }
+textarea { width: 100%; resize: vertical; font-family: ui-monospace, monospace; font-size: 12.5px; }
+
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; font-variant-numeric: normal; }
+th { color: var(--text-secondary); font-weight: 500; font-size: 12px; cursor: pointer; user-select: none; }
+tbody tr:hover { background: var(--wash); }
+.scroll { overflow-x: auto; max-height: 380px; overflow-y: auto; }
+code { font-family: ui-monospace, monospace; font-size: 12.5px; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 3px 10px; font-size: 12px;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.tooltip {
+  position: absolute; pointer-events: none; z-index: 5;
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 7px; padding: 6px 9px; font-size: 12px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.13); white-space: nowrap;
+}
+.stale { opacity: 0.55; transition: opacity 120ms; }

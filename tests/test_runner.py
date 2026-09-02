@@ -59,6 +59,46 @@ def test_run_end_to_end_produces_an_audit(store):
     assert store.get_table(f"{st.run_id}/equity.parquet").height > 0
 
 
+# The frontend reads these field names directly (web/src/api.ts). Renaming one
+# in the runner without touching the other breaks a chart silently -- a missing
+# key reads as `undefined` and plots as an empty panel, not an error.
+FRONTEND_FIELDS = {
+    "audit.deflation": {"n_trials", "n_obs", "sr_ann", "sr_trials_std_ann", "sr0_ann",
+                        "skew", "kurtosis", "psr_vs_zero", "dsr"},
+    "audit.pbo": {"pbo", "n_combinations", "n_blocks", "median_is_sharpe",
+                  "median_oos_sharpe", "selection_premium", "prob_oos_loss",
+                  "deterioration_slope"},
+    "audit.search_null": {"n_boot", "mean_block", "sr0_ann", "sr0_ann_q95",
+                          "sr_null_std_ann", "n_eff", "n_eff_participation",
+                          "mean_abs_corr", "rc_p_value", "dsr"},
+    "audit.cost_curve": {"points", "break_even_bps", "mean_turnover"},
+}
+TRIAL_FIELDS = {"trial", "expr", "rebalance_every_h", "cost_bps", "n_bars", "sharpe",
+                "gross_sharpe", "is_sharpe", "oos_sharpe", "ann_return", "ann_vol",
+                "max_drawdown", "hit_rate", "turnover_per_rebal", "break_even_bps"}
+
+
+def test_result_shapes_match_what_the_frontend_reads(store):
+    spec = RunSpec(grids=["cs_zscore(ts_ret(close, [24, 72]))"], rebalances=[24],
+                   n_splits=4, n_blocks=8, n_boot=50)
+    st = create(spec, store, panel=prepared(hours=24 * 90))
+    assert execute(st.run_id, store).state == "done"
+
+    report = store.get_json(f"{st.run_id}/audit.json")
+    for path, fields in FRONTEND_FIELDS.items():
+        section = report[path.split(".")[1]]
+        assert fields <= set(section), f"{path} missing {fields - set(section)}"
+    assert TRIAL_FIELDS <= set(report["winner"])
+    assert isinstance(report["survives"], bool)
+    assert {"cost_bps", "sharpe"} <= set(report["cost_curve"]["points"][0])
+
+    assert TRIAL_FIELDS <= set(store.get_table(f"{st.run_id}/trials.parquet").columns)
+    assert {"is_sharpe", "oos_sharpe", "logit", "is_sharpe_ann", "oos_sharpe_ann"} <= set(
+        store.get_table(f"{st.run_id}/pbo_cloud.parquet").columns)
+    assert {"ts", "equity", "equity_gross"} <= set(
+        store.get_table(f"{st.run_id}/equity.parquet").columns)
+
+
 def test_api_surface(store):
     client = TestClient(__import__("api.main", fromlist=["app"]).app)
     assert client.get("/healthz").json()["ok"] is True
