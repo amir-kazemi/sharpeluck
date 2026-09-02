@@ -117,8 +117,55 @@ Verdict: **does not survive**. Gross Sharpe is 1.06 and half of it is eaten by
 5 bps of cost. This is the intended outcome of the exercise — a platform that
 only ever confirms signals is not an audit.
 
+## The runner seam
+
+A run is a spec, and a spec is the whole experiment: grids, sign templates,
+rebalances, cost, fold and block counts. Trial expansion is deterministic, so
+the trial budget the deflation needs is recorded rather than remembered.
+
+One worker does one trial. It takes a run id and a trial index, reads the
+prepared panel and spec from the store, and writes a summary and a per-bar
+return series back. It holds no state and talks to nothing but the store:
+
+    alpha_audit/runner/store.py      keys like runs/<id>/trials/7.json
+    alpha_audit/runner/worker.py     ALPHA_AUDIT_RUN_ID + ALPHA_AUDIT_TRIAL
+    alpha_audit/runner/dispatch.py   create / execute / finalise
+
+That is the only thing the Azure port has to preserve. `LocalStore` becomes a
+blob adapter over the same keys; the dispatcher's pool becomes a queue and a
+Container Apps Job; the worker does not change.
+
+Locally the dispatcher defaults to **threads**, switchable with
+`ALPHA_AUDIT_EXECUTOR=process`. This development host is an HPC login node whose
+cgroup caps the user at 500 tasks, and every spawned Polars runtime starts a
+batch of threads of its own, so a six-process pool fails at import with EAGAIN.
+Threads share one Polars runtime and Polars releases the GIL for this work, so
+the fan-out is real. On Delta the honest way to use many cores is Slurm, not a
+login-node pool — in Azure the question does not arise, because each worker is
+its own container.
+
+## The API
+
+    GET  /healthz
+    GET  /ops                    the signal language, for the expression builder
+    POST /runs/preview           expand a spec and count the trials, without spending them
+    POST /runs                   record the spec, launch the dispatcher, 202 + run id
+    GET  /runs                   all runs, newest first
+    GET  /runs/{id}              status + spec
+    GET  /runs/{id}/trials       the trial table
+    GET  /runs/{id}/audit        deflation, PBO, reality check, cost curve
+    GET  /runs/{id}/cloud        IS vs OOS Sharpe per CSCV split -- the trial cloud
+    GET  /runs/{id}/equity       the winner's net and gross equity curves
+
+Never computes a run in-process: a POST records the spec and launches the
+dispatcher separately. Reading results is open; submitting a run costs compute
+and needs `ALPHA_AUDIT_TOKEN`. That single check is the entire authorisation
+model, deliberately — see *deliberate omissions*.
+
 ## Run it
 
     python -m venv .venv && .venv/bin/pip install -r requirements.txt
     .venv/bin/python -m pytest -q
     .venv/bin/python scripts/ingest.py --months 2023-12 2024-01
+    .venv/bin/python scripts/run.py --label baseline      # fan out + audit
+    .venv/bin/uvicorn api.main:app --reload               # the API on :8000
