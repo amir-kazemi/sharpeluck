@@ -5,7 +5,7 @@ import polars as pl
 import pytest
 from fastapi.testclient import TestClient
 
-from alpha_audit.runner.dispatch import create, execute
+from alpha_audit.runner.dispatch import SCHEMA_VERSION, create, execute
 from alpha_audit.runner.spec import RunSpec
 from alpha_audit.runner.store import LocalStore
 from tests.synth import prepared
@@ -90,6 +90,9 @@ def test_result_shapes_match_what_the_frontend_reads(store):
         assert fields <= set(section), f"{path} missing {fields - set(section)}"
     assert TRIAL_FIELDS <= set(report["winner"])
     assert isinstance(report["survives"], bool)
+    # The UI gates on this; an unversioned artefact would render as a crash.
+    assert report["schema_version"] == SCHEMA_VERSION
+    assert store.get_json(f"{st.run_id}/status.json")["schema_version"] == SCHEMA_VERSION
     assert {"cost_bps", "sharpe"} <= set(report["cost_curve"]["points"][0])
 
     assert TRIAL_FIELDS <= set(store.get_table(f"{st.run_id}/trials.parquet").columns)

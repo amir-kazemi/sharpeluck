@@ -27,6 +27,11 @@ from .spec import RunSpec, RunStatus
 from .store import LocalStore, ResultStore
 from .worker import run_one
 
+# Bump when the shape of a run's stored artefacts changes. 1: initial.
+# 2: audit.json gained search_null (replacing reality_check). 3: pbo_cloud gained
+# annualised columns.
+SCHEMA_VERSION = 3
+
 MAX_WORKERS = int(os.environ.get("ALPHA_AUDIT_WORKERS", "6"))
 
 # Threads by default, processes on request.
@@ -60,7 +65,8 @@ def create(spec: RunSpec, store: ResultStore, panel: pl.DataFrame | None = None)
     store.put_table(f"{run_id}/panel.parquet", panel)
     store.put_json(f"{run_id}/spec.json", spec.model_dump())
     st = RunStatus(run_id=run_id, state="queued", n_trials=len(trials),
-                   label=spec.label, created_at=_now())
+                   label=spec.label, created_at=_now(),
+                   schema_version=SCHEMA_VERSION)
     store.put_json(f"{run_id}/status.json", st.model_dump())
     return st
 
@@ -148,6 +154,7 @@ def finalise(run_id: str, store: ResultStore) -> dict:
                     ann_periods=HOURS_PER_YEAR)
 
     report = {
+        "schema_version": SCHEMA_VERSION,
         "run_id": run_id,
         "winner": winner,
         "deflation": d.as_dict(),

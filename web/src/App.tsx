@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "./api";
+import { api, SCHEMA_VERSION, type RunStatus } from "./api";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Figure } from "./components/Figure";
 import { SubmitPanel } from "./components/SubmitPanel";
 import { TrialTable } from "./components/TrialTable";
@@ -43,9 +44,15 @@ export default function App() {
         ? 1500 : false,
   });
 
-  const id = selected ?? runs.data?.find((r) => r.state === "done")?.run_id ?? null;
+  const loadable = (r: RunStatus) =>
+    r.state === "done" && (r.schema_version ?? 0) === SCHEMA_VERSION;
+
+  const id = selected ?? runs.data?.find(loadable)?.run_id ?? null;
   const run = runs.data?.find((r) => r.run_id === id) ?? null;
-  const ready = run?.state === "done";
+  const ready = !!run && loadable(run);
+  // A finished run whose artefacts predate this build: readable, but not by
+  // these charts. Say so rather than rendering empty panels.
+  const outdated = run?.state === "done" && !ready;
 
   const audit = useQuery({ queryKey: ["audit", id], queryFn: () => api.audit(id!), enabled: !!id && ready });
   const trials = useQuery({ queryKey: ["trials", id], queryFn: () => api.trials(id!), enabled: !!id && ready });
@@ -75,15 +82,26 @@ export default function App() {
               {r.created_at.replace("T", " ").slice(0, 16)} · {r.n_trials} trials
               {r.label ? ` · ${r.label}` : ""} · {r.state}
               {r.state === "running" ? ` ${r.n_done}/${r.n_trials}` : ""}
+              {r.state === "done" && !loadable(r) ? " · older format" : ""}
             </option>
           ))}
         </select>
-        {run && run.state !== "done" && (
-          <span className="sub">
-            {run.state === "failed" ? "✕ failed" : `${run.n_done}/${run.n_trials} trials complete`}
-          </span>
+        {run && run.state === "running" && (
+          <span className="sub">{run.n_done}/{run.n_trials} trials complete</span>
         )}
       </div>
+
+      {outdated && (
+        <section className="card">
+          <h3>Older result format</h3>
+          <p className="sub">
+            This run finished, but its stored results predate the current audit
+            layer (schema {run?.schema_version ?? 0}, this build reads{" "}
+            {SCHEMA_VERSION}). Submit the run again below to produce results these
+            charts can read.
+          </p>
+        </section>
+      )}
 
       {run?.state === "failed" && (
         <section className="card" style={{ borderColor: "var(--critical)" }}>
@@ -92,6 +110,7 @@ export default function App() {
         </section>
       )}
 
+      <ErrorBoundary resetKey={id ?? ""}>
       <div className={busy ? "stale" : undefined}
            style={{ display: "grid", gap: 16 }}>
         {audit.data && (
@@ -135,6 +154,7 @@ export default function App() {
 
         <SubmitPanel onSubmitted={setSelected} />
       </div>
+      </ErrorBoundary>
     </div>
   );
 }

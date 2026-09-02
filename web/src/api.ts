@@ -1,6 +1,11 @@
 const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
+/** Bumped by the runner whenever stored artefacts change shape; runs written
+ *  before versioning report 0. Must match SCHEMA_VERSION in dispatch.py. */
+export const SCHEMA_VERSION = 3;
+
 export type RunStatus = {
+  schema_version?: number;
   run_id: string;
   state: "queued" | "running" | "done" | "failed";
   n_trials: number;
@@ -30,6 +35,7 @@ export type Trial = {
 };
 
 export type Audit = {
+  schema_version?: number;
   run_id: string;
   winner: Trial;
   deflation: {

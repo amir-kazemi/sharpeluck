@@ -70,6 +70,10 @@ class RunSpec(BaseModel):
 
 
 class RunStatus(BaseModel):
+    # 0 means "written before versioning existed". Results are stored as files,
+    # so a run outlives the code that produced it; the UI needs to know which
+    # generation it is looking at rather than discovering it via a TypeError.
+    schema_version: int = 0
     run_id: str
     state: str                 # queued | running | done | failed
     n_trials: int
