@@ -47,8 +47,8 @@ export function CostCurve({ audit }: { audit: Audit }) {
         {be !== null && be > 0 && be <= xhi && (
           <g>
             <line x1={x(be)} x2={x(be)} y1={M.top} y2={HEIGHT - M.bottom}
-                  stroke="var(--axis)" strokeWidth={1} />
-            <text x={x(be) + 5} y={M.top + 11} fill="var(--muted)" fontSize={10.5}>
+                  stroke="var(--rule)" strokeWidth={1.5} />
+            <text x={x(be) + 5} y={M.top + 11} fill="var(--text-secondary)" fontSize={10.5}>
               break-even {be.toFixed(1)} bps
             </text>
           </g>

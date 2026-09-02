@@ -46,9 +46,9 @@ export function TrialCloud({ points, pbo }: { points: CloudPoint[]; pbo: number 
           <rect x={M.left} y={y(0)} width={Math.max(0, width - M.right - M.left)}
                 height={Math.max(0, y(ylo) - y(0))} fill="var(--grid)" opacity={0.45} />
         )}
-        <line x1={M.left} x2={width - M.right} y1={y(0)} y2={y(0)} stroke="var(--axis)" strokeWidth={1} />
+        <line x1={M.left} x2={width - M.right} y1={y(0)} y2={y(0)} stroke="var(--rule)" strokeWidth={1.5} />
         <line x1={x(0)} x2={x(0)} y1={M.top} y2={HEIGHT - M.bottom} stroke="var(--axis)" strokeWidth={1} />
-        <text x={M.left + 6} y={y(0) + 14} fill="var(--muted)" fontSize={10.5}>
+        <text x={M.left + 6} y={y(0) + 14} fill="var(--text-secondary)" fontSize={10.5}>
           below: winner lost money out of sample ({(pbo * 100).toFixed(0)}%)
         </text>
         {points.map((p, i) => (

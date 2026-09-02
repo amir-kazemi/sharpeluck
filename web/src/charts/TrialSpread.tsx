@@ -46,7 +46,7 @@ export function TrialSpread({ trials, audit }: { trials: Trial[]; audit: Audit }
         <line x1={M.left} x2={width - M.right} y1={y(0)} y2={y(0)}
               stroke="var(--axis)" strokeWidth={1} />
         <line x1={M.left} x2={width - M.right} y1={y(sr0)} y2={y(sr0)}
-              stroke="var(--axis)" strokeWidth={1} />
+              stroke="var(--rule)" strokeWidth={1.5} />
         <text x={width - M.right - 2} y={y(sr0) - 6} textAnchor="end"
               fill="var(--text-secondary)" fontSize={11}>
           {sr0.toFixed(2)} — best expected from noise alone
