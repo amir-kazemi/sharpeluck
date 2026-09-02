@@ -37,3 +37,14 @@ def synth_panel(
             ).with_columns(pl.col("ts").dt.replace_time_zone("UTC"))
         )
     return pl.concat(frames).sort(["symbol", "ts"])
+
+
+def prepared(symbols=None, hours: int = 24 * 90, seed: int = 7):
+    """A ready-to-backtest feature panel built entirely from synthetic bars."""
+    from alpha_audit.research.signals import prepare_panel
+    from alpha_audit.research.universe import UniverseRules, build_universe
+
+    symbols = symbols or {"AAA": 5e6, "BBB": 3e6, "CCC": 9e6, "DDD": 1e6, "EEE": 2e6}
+    rules = UniverseRules(max_symbols=10, min_adv_usd=1.0)
+    panel = synth_panel(symbols, hours=hours, seed=seed)
+    return prepare_panel(panel, build_universe(panel, rules), rules)
