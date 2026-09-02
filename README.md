@@ -166,7 +166,7 @@ Locally the dispatcher defaults to **threads**, switchable with
 cgroup caps the user at 500 tasks, and every spawned Polars runtime starts a
 batch of threads of its own, so a six-process pool fails at import with EAGAIN.
 Threads share one Polars runtime and Polars releases the GIL for this work, so
-the fan-out is real. On Delta the honest way to use many cores is Slurm, not a
+the fan-out is real. The honest way to use many cores here is Slurm, not a
 login-node pool — in Azure the question does not arise, because each worker is
 its own container.
 

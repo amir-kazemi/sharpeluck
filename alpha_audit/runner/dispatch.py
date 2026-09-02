@@ -42,7 +42,8 @@ MAX_WORKERS = int(os.environ.get("ALPHA_AUDIT_WORKERS", "6"))
 # every spawned Polars runtime starts a batch of threads of its own; six of them
 # fail at import with EAGAIN. Threads share one Polars runtime, and Polars
 # releases the GIL for the work that matters here, so the fan-out is real.
-# On Delta the honest way to use many cores is Slurm, not a login-node pool.
+# On the Illinois Campus Cluster the honest way to use many cores is Slurm,
+# not a login-node pool.
 EXECUTOR = os.environ.get("ALPHA_AUDIT_EXECUTOR", "thread")
 POLARS_THREADS = os.environ.get("ALPHA_AUDIT_POLARS_THREADS", "2")
 
