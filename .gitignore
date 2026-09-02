@@ -1,0 +1,11 @@
+# data lives on scratch via the ./data symlink -- never in git
+data
+*.parquet
+*.zip
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+node_modules/
+dist/
+.env
