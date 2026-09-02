@@ -152,6 +152,7 @@ def run_trial(
     expr: str,
     params: BacktestParams,
     wf: WalkForward | None = None,
+    keep_series: bool = False,
 ) -> dict:
     """Full-sample metrics plus per-fold in-sample / out-of-sample Sharpes.
 
@@ -175,6 +176,10 @@ def run_trial(
              "oos_sharpe": metrics(te, params)["sharpe"]}
         )
     row["folds"] = folds
+    if keep_series:
+        # The audit layer needs per-bar returns, not summary statistics: PBO
+        # resplits them and the bootstrap resamples them.
+        row["series"] = p
     ok = lambda k: [f[k] for f in folds if f[k] is not None]
     row["is_sharpe"] = sum(ok("is_sharpe")) / len(ok("is_sharpe")) if ok("is_sharpe") else None
     row["oos_sharpe"] = sum(ok("oos_sharpe")) / len(ok("oos_sharpe")) if ok("oos_sharpe") else None

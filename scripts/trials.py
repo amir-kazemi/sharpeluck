@@ -49,17 +49,22 @@ def main() -> int:
     ]
     print(f"trials: {len(trials)}\n")
 
-    rows, folds = [], []
-    for expr, reb in trials:
-        row = run_trial(feats, expr, BacktestParams(reb, COST_BPS), WalkForward(n_splits=6))
+    rows, folds, series = [], [], []
+    for i, (expr, reb) in enumerate(trials):
+        row = run_trial(feats, expr, BacktestParams(reb, COST_BPS),
+                        WalkForward(n_splits=6), keep_series=True)
         for f in row.pop("folds"):
             folds.append({"expr": expr, "rebalance_every_h": reb, **f})
-        rows.append(row)
+        series.append(row.pop("series").with_columns(
+            pl.lit(i).alias("trial"), pl.lit(expr).alias("expr"),
+            pl.lit(reb).alias("rebalance_every_h")))
+        rows.append({"trial": i, **row})
 
     df = pl.DataFrame(rows).sort("is_sharpe", descending=True, nulls_last=True)
     GOLD.mkdir(parents=True, exist_ok=True)
     df.write_parquet(GOLD / "trials.parquet", compression="zstd")
     pl.DataFrame(folds).write_parquet(GOLD / "trial_folds.parquet", compression="zstd")
+    pl.concat(series).write_parquet(GOLD / "trial_returns.parquet", compression="zstd")
 
     show = df.select(
         pl.col("expr").str.slice(0, 40),
