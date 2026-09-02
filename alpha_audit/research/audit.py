@@ -259,35 +259,174 @@ class RealityCheck:
         return asdict(self)
 
 
+def _null_bootstrap(
+    m: np.ndarray, n_boot: int, mean_block: float, seed: int, batch: int = 32
+):
+    """Resample the whole trial family under H0: every trial has zero mean.
+
+    Rows are resampled *jointly* across trials, so the correlation between
+    trials survives -- that is the entire point. Blocks are geometric, so the
+    autocorrelation within each trial survives too.
+
+    Returns the null distribution of the best trial's Sharpe, the null
+    dispersion of an individual trial's Sharpe, and the observed Sharpes, all
+    per observation.
+
+    The gather is chunked. `m[idx]` for the whole bootstrap is
+    (n_boot, n_obs, n_trials) -- several GB at realistic sizes, which is merely
+    wasteful on a login node and an OOM kill in a 2 GB container. Indices are
+    generated once, cheaply; only the gather is batched.
+    """
+    t, k = m.shape
+    mean, sd = m.mean(0), m.std(0, ddof=1)
+    sd = np.where(sd > 0, sd, np.inf)
+    rng = np.random.default_rng(seed)
+    idx = stationary_bootstrap_indices(t, n_boot, mean_block, rng)
+
+    best = np.empty(n_boot)
+    ssum = np.zeros(k)
+    ssq = np.zeros(k)
+    for lo in range(0, n_boot, batch):
+        sl = idx[lo : lo + batch]
+        sr = (m[sl].mean(axis=1) - mean) / sd          # (batch, k) null Sharpes
+        best[lo : lo + sl.shape[0]] = sr.max(axis=1)
+        ssum += sr.sum(0)
+        ssq += (sr**2).sum(0)
+    n = n_boot * k
+    null_sd = float(np.sqrt(max(ssq.sum() / n - (ssum.sum() / n) ** 2, 0.0)))
+    return best, null_sd, mean / sd
+
+
 def reality_check(
-    returns: np.ndarray,
-    n_boot: int = 1000,
-    mean_block: float = 24.0,
-    seed: int = 0,
+    returns: np.ndarray, n_boot: int = 1000, mean_block: float = 24.0, seed: int = 0
 ) -> RealityCheck:
     """H0: the best of N trials has no edge over a zero benchmark.
 
-    Studentised statistic (Hansen's variant), which keeps a low-vol trial from
-    being drowned out by a high-vol one:  V = max_k sqrt(T) * mean_k / sd_k.
-    The bootstrap recentres each trial on its own mean, so the null is imposed
-    on all N jointly rather than on the winner alone.
+    Studentised statistic (Hansen's variant), which stops a high-vol trial from
+    drowning out a low-vol one:  V = max_k sqrt(T) * mean_k / sd_k.
     """
     m = np.nan_to_num(np.asarray(returns, dtype=float), nan=0.0)
-    t, k = m.shape
-    rng = np.random.default_rng(seed)
-    mean, sd = m.mean(0), m.std(0, ddof=1)
-    sd = np.where(sd > 0, sd, np.inf)
-    v = float(np.max(math.sqrt(t) * mean / sd))
-
-    idx = stationary_bootstrap_indices(t, n_boot, mean_block, rng)
-    boot_mean = m[idx].mean(axis=1)                      # (n_boot, k)
-    v_star = np.max(math.sqrt(t) * (boot_mean - mean) / sd, axis=1)
+    t = m.shape[0]
+    best, _, obs = _null_bootstrap(m, n_boot, mean_block, seed)
+    v = float(np.max(obs) * math.sqrt(t))
     return RealityCheck(
-        p_value=float((v_star >= v).mean()),
+        p_value=float((best * math.sqrt(t) >= v).mean()),
         statistic=v,
         n_boot=n_boot,
         mean_block=mean_block,
-        n_trials=k,
+        n_trials=m.shape[1],
+    )
+
+
+# --------------------------------------------------------------------------
+# How many of those trials were actually independent?
+# --------------------------------------------------------------------------
+def effective_n_trials(sr0: float, sr_null_std: float) -> float:
+    """Invert E[max of N]: how many *independent* trials would give the
+    expected-best Sharpe we actually measured?
+
+    This is the answer to the DSR's independence assumption. Nested windows are
+    near-duplicates and every signal is run beside its own negation, so 44
+    trials are nowhere near 44 independent looks -- and a benchmark that takes N
+    at face value is wrong by however much that turns out to matter.
+    """
+    if sr0 <= 0 or sr_null_std <= 0:
+        return 1.0
+    if expected_max_sharpe(2, sr_null_std) > sr0:
+        return 1.0
+    lo = hi = 2.0
+    while expected_max_sharpe(int(hi), sr_null_std) < sr0 and hi < 1e7:
+        lo, hi = hi, hi * 2.0
+    if hi >= 1e7:
+        return float(hi)
+    for _ in range(60):                        # monotone in N, so bisection
+        mid = 0.5 * (lo + hi)
+        if expected_max_sharpe(int(round(mid)), sr_null_std) < sr0:
+            lo = mid
+        else:
+            hi = mid
+    return 0.5 * (lo + hi)
+
+
+def participation_ratio(returns: np.ndarray) -> float:
+    """(sum L)^2 / sum L^2 over the eigenvalues of the trial correlation matrix:
+    how many dimensions the trial family really spans.
+
+    Reported beside the bootstrap figure as an independent diagnostic, but not
+    trusted over it -- it counts a signal and its exact negation as a single
+    direction, whereas a search that takes the maximum gets closer to two looks
+    out of them.
+    """
+    m = np.asarray(returns, dtype=float)
+    keep = m.std(0, ddof=1) > 0
+    if keep.sum() < 2:
+        return 1.0
+    c = np.nan_to_num(np.corrcoef(m[:, keep], rowvar=False), nan=0.0)
+    lam = np.linalg.eigvalsh(c)
+    lam = lam[lam > 1e-12]
+    return float(lam.sum() ** 2 / (lam**2).sum())
+
+
+@dataclass(frozen=True)
+class SearchNull:
+    n_trials: int
+    n_boot: int
+    mean_block: float
+    sr0_ann: float                  # E[best Sharpe] under H0, correlations kept
+    sr0_ann_q95: float
+    sr_null_std_ann: float
+    n_eff: float
+    n_eff_participation: float
+    mean_abs_corr: float
+    rc_p_value: float
+    dsr: float                      # the winner, deflated against sr0_ann
+
+    def as_dict(self) -> dict:
+        return asdict(self)
+
+
+def search_null(
+    returns: np.ndarray,
+    best_col: int,
+    ann_periods: int,
+    n_boot: int = 2000,
+    mean_block: float = 48.0,
+    seed: int = 0,
+) -> SearchNull:
+    """Deflate against the *measured* null of this search rather than an assumed one.
+
+    `deflate()` gets E[best of N] from a Gumbel approximation that treats the N
+    trials as independent draws. Here the same quantity is measured by
+    resampling the real trial family, so correlation between trials and
+    autocorrelation within them both carry through. The two numbers side by side
+    are the honest statement of what the independence assumption was costing.
+    """
+    m = np.nan_to_num(np.asarray(returns, dtype=float), nan=0.0)
+    t = m.shape[0]
+    scale = math.sqrt(ann_periods)
+    best, null_sd, obs = _null_bootstrap(m, n_boot, mean_block, seed)
+    sr0 = float(best.mean())
+
+    r = m[:, best_col]
+    mm = r - r.mean()
+    var = (mm**2).mean()
+    skew = 0.0 if var == 0 else float((mm**3).mean() / var**1.5)
+    kurt = 3.0 if var == 0 else float((mm**4).mean() / var**2)
+
+    c = np.nan_to_num(np.corrcoef(m, rowvar=False), nan=0.0)
+    off = ~np.eye(m.shape[1], dtype=bool)
+    return SearchNull(
+        n_trials=m.shape[1],
+        n_boot=n_boot,
+        mean_block=mean_block,
+        sr0_ann=sr0 * scale,
+        sr0_ann_q95=float(np.quantile(best, 0.95) * scale),
+        sr_null_std_ann=null_sd * scale,
+        n_eff=effective_n_trials(sr0, null_sd),
+        n_eff_participation=participation_ratio(m),
+        mean_abs_corr=float(np.mean(np.abs(c[off]))),
+        rc_p_value=float((best >= float(np.max(obs))).mean()),
+        dsr=float(probabilistic_sharpe_ratio(float(obs[best_col]), t, skew, kurt, sr0)),
     )
 
 

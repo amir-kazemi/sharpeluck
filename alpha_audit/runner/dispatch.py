@@ -20,7 +20,7 @@ import polars as pl
 
 from ..config import GOLD
 from ..ingest.silver import load_panel
-from ..research.audit import cost_curve, deflate, pbo, reality_check
+from ..research.audit import cost_curve, deflate, pbo, search_null
 from ..research.backtest import HOURS_PER_YEAR
 from ..research.signals import prepare_panel
 from .spec import RunSpec, RunStatus
@@ -133,11 +133,16 @@ def finalise(run_id: str, store: ResultStore) -> dict:
     m = wide.select(cols).fill_null(0.0).to_numpy()
 
     winner = table.row(0, named=True)
+    wcol = cols.index(str(winner["trial"]))
     wr = allser.filter(pl.col("trial") == winner["trial"]).sort("ts")
-    d = deflate(m[:, cols.index(str(winner["trial"]))],
-                table.sort("trial")["sharpe"].to_numpy(), HOURS_PER_YEAR)
+    d = deflate(m[:, wcol], table.sort("trial")["sharpe"].to_numpy(), HOURS_PER_YEAR)
     pb, cloud = pbo(m, n_blocks=spec.n_blocks)
-    rc = reality_check(m, n_boot=spec.n_boot, mean_block=spec.mean_block_h)
+    # One bootstrap pass gives the reality-check p-value, the measured
+    # expected-best-Sharpe under the null, and the effective number of
+    # independent trials -- so the deflation no longer has to assume the 44
+    # trials were 44 independent looks.
+    sn = search_null(m, wcol, HOURS_PER_YEAR, n_boot=spec.n_boot,
+                     mean_block=spec.mean_block_h)
     cc = cost_curve(wr["gross"].to_numpy(), wr["turnover"].to_numpy(),
                     ann_periods=HOURS_PER_YEAR)
 
@@ -146,9 +151,10 @@ def finalise(run_id: str, store: ResultStore) -> dict:
         "winner": winner,
         "deflation": d.as_dict(),
         "pbo": pb.as_dict(),
-        "reality_check": rc.as_dict(),
+        "search_null": sn.as_dict(),
         "cost_curve": cc,
-        "survives": bool(d.dsr > 0.95 and pb.pbo < 0.3 and rc.p_value < 0.05),
+        # Judged on the measured null, not the analytic one.
+        "survives": bool(sn.dsr > 0.95 and pb.pbo < 0.3 and sn.rc_p_value < 0.05),
     }
     store.put_json(f"{run_id}/audit.json", report)
     store.put_table(f"{run_id}/pbo_cloud.parquet", pl.DataFrame(

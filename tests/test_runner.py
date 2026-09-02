@@ -47,9 +47,10 @@ def test_run_end_to_end_produces_an_audit(store):
     trials = store.get_table(f"{st.run_id}/trials.parquet")
     assert trials.height == 4
     report = store.get_json(f"{st.run_id}/audit.json")
-    assert set(report) >= {"winner", "deflation", "pbo", "reality_check", "cost_curve"}
+    assert set(report) >= {"winner", "deflation", "pbo", "search_null", "cost_curve"}
     assert 0.0 <= report["pbo"]["pbo"] <= 1.0
     assert 0.0 <= report["deflation"]["dsr"] <= 1.0
+    assert 1.0 <= report["search_null"]["n_eff"] <= report["search_null"]["n_trials"] * 3
     # Synthetic data has no edge, so nothing should be allowed to survive.
     assert report["survives"] is False
 

@@ -15,8 +15,9 @@ import numpy as np
 import pytest
 
 from alpha_audit.research.audit import (
-    cost_curve, deflate, expected_max_sharpe, pbo, probabilistic_sharpe_ratio,
-    reality_check, stationary_bootstrap_indices,
+    _null_bootstrap, cost_curve, deflate, effective_n_trials, expected_max_sharpe,
+    participation_ratio, pbo, probabilistic_sharpe_ratio, reality_check,
+    search_null, stationary_bootstrap_indices,
 )
 
 ANN = 24 * 365
@@ -161,3 +162,69 @@ def test_cost_curve_is_monotone_and_agrees_with_break_even():
     # At the break-even cost the mean net return is ~0, so the Sharpe is ~0.
     at_be = cost_curve(gross, turnover, bps_grid=(be,))["points"][0]["sharpe"]
     assert abs(at_be) < 0.05, at_be
+
+
+# --------------------------------------------------------------------------
+# Effective number of trials -- the answer to the independence assumption
+# --------------------------------------------------------------------------
+def test_measured_null_matches_the_analytic_one_when_trials_really_are_independent():
+    """The bootstrap benchmark must reproduce the Gumbel one exactly where the
+    Gumbel one is valid. If it does not, the machinery is broken, not subtle."""
+    rng = np.random.default_rng(21)
+    t, k = 3000, 20
+    m = _noise(t, k, rng)
+    sn = search_null(m, int(np.argmax(_sharpes_ann(m))), ANN,
+                     n_boot=800, mean_block=1.0, seed=1)
+    analytic = expected_max_sharpe(k, 1.0 / np.sqrt(t)) * np.sqrt(ANN)
+    assert sn.sr0_ann == pytest.approx(analytic, rel=0.25), (sn.sr0_ann, analytic)
+    assert 0.4 * k < sn.n_eff < 2.5 * k, sn.n_eff
+    assert sn.n_eff_participation == pytest.approx(k, rel=0.25)
+    assert sn.mean_abs_corr < 0.05
+
+
+def test_duplicated_trials_collapse_to_one_look():
+    rng = np.random.default_rng(23)
+    col = rng.normal(0.0, 0.01, 3000)
+    m = np.tile(col[:, None], (1, 20))
+    sn = search_null(m, 0, ANN, n_boot=400, mean_block=1.0, seed=2)
+    assert sn.mean_abs_corr == pytest.approx(1.0, abs=1e-9)
+    assert sn.n_eff_participation == pytest.approx(1.0, abs=0.05)
+    assert sn.n_eff < 3.0, sn.n_eff        # 20 copies of one trial is one trial
+
+
+def test_a_signal_and_its_negation_are_more_than_one_look_but_fewer_than_two_free_ones():
+    """Why the bootstrap figure is the one to trust.
+
+    max(SR, -SR) = |SR|, whose expectation is sd*sqrt(2/pi) -- larger than the
+    expected best of two *independent* trials. So testing a signal alongside its
+    exact negation buys more search than two independent looks, while the
+    correlation matrix sees a single direction and the participation ratio
+    reports 1.
+    """
+    rng = np.random.default_rng(29)
+    col = rng.normal(0.0, 0.01, 4000)
+    m = np.column_stack([col, -col])
+    sn = search_null(m, 0, ANN, n_boot=600, mean_block=1.0, seed=3)
+    assert sn.mean_abs_corr == pytest.approx(1.0, abs=1e-9)
+    assert sn.n_eff_participation == pytest.approx(1.0, abs=0.05)
+    assert sn.n_eff > 2.0, sn.n_eff
+    assert sn.n_eff > sn.n_eff_participation
+
+
+def test_effective_n_is_monotone_and_degenerate_cases_are_one():
+    sd = 0.02
+    ns = [effective_n_trials(expected_max_sharpe(n, sd), sd) for n in (5, 20, 100)]
+    assert ns == sorted(ns)
+    assert all(abs(a - b) < 0.15 * b for a, b in zip(ns, (5, 20, 100))), ns
+    assert effective_n_trials(0.0, sd) == 1.0
+    assert effective_n_trials(-1.0, sd) == 1.0
+    assert effective_n_trials(0.05, 0.0) == 1.0
+
+
+def test_bootstrap_gather_is_chunked_without_changing_the_answer():
+    """Batching only bounds peak memory; the resampled paths are identical."""
+    rng = np.random.default_rng(31)
+    m = _noise(800, 6, rng)
+    a = _null_bootstrap(m, 96, 8.0, seed=5, batch=8)
+    b = _null_bootstrap(m, 96, 8.0, seed=5, batch=96)
+    assert np.allclose(a[0], b[0]) and a[1] == pytest.approx(b[1])

@@ -87,6 +87,7 @@ Four independent lenses on one trial table:
 | **Deflated Sharpe Ratio** | Does the winner beat the Sharpe that the *best of N* noise strategies would have handed you, given non-normal returns? |
 | **PBO** (CSCV) | Across many half-sample splits, how often does the in-sample winner land below the out-of-sample median? |
 | **Reality Check** | Studentised White/Hansen statistic on a Politis–Romano stationary bootstrap, so autocorrelation is preserved and the null is imposed on all N trials jointly. |
+| **Effective N** | Same bootstrap pass: how many *independent* trials this search was actually worth, which is what the DSR needs and cannot assume. |
 | **Cost curve** | At what assumed cost in bps does the edge die? |
 
 Calibration is asserted by simulation rather than against constants copied from
@@ -95,27 +96,52 @@ selection premium of a couple of sampling sigmas, an uninformative DSR, and a
 reality check that rejects at roughly its nominal rate. A constant I cannot
 re-derive is a constant I cannot debug.
 
-**Known limitation.** The DSR treats the N trials as independent draws. Ours are
-not: nested windows are highly correlated, and each signal appears alongside its
-exact negation, so the effective number of independent trials is well below 44
-while the trial-Sharpe dispersion is inflated by real structure. The DSR here is
-therefore conservative. Quantifying the effective N is the honest next step.
+**The independence problem, and its fix.** The DSR's analytic benchmark assumes
+the N trials are independent draws. Ours are not: nested windows are
+near-duplicates, and every signal is run beside its exact negation. Taking N at
+face value therefore deflates against the wrong benchmark.
+
+So the benchmark is *measured* instead of assumed. The stationary bootstrap
+already resamples the whole trial family jointly under the null, preserving both
+the correlation between trials and the autocorrelation within them — so the same
+pass that produces the reality-check p-value also produces the null distribution
+of the best trial's Sharpe. Inverting the Gumbel expression against that gives
+an **effective number of trials**: how many genuinely independent looks this
+search was worth.
+
+    E[best] if 44 independent   +2.72     ->  DSR 0.023
+    E[best] as measured         +1.80     ->  DSR 0.125
+    effective trials             20.5 of 44
+
+`test_measured_null_matches_the_analytic_one_when_trials_really_are_independent`
+pins the two together where the analytic form is valid; the divergence above is
+therefore the correlation structure, not a bug.
+
+A correlation-matrix participation ratio is reported alongside (3.7 here, mean
+|corr| 0.40) but not trusted over the bootstrap. It counts a signal and its
+negation as one direction, whereas a search that takes the maximum gets more
+than that from them: `max(SR, -SR) = |SR|`, whose expectation exceeds the
+expected best of two *independent* trials. Two anti-correlated trials are worth
+roughly 2.8 independent looks, not 1 — which is why the two estimates differ by
+so much here, and why the honest one is the one derived from the actual maximum.
 
 ## The result — the winner does not survive
 
 The in-sample winner, 72h cross-sectional reversal at daily rebalance:
 
-    observed Sharpe            +0.55
-    expected best-of-44 noise  +2.72
-    DSR                         0.023      P(edge is real) ~ 2%
+    net Sharpe                 +0.55
+    E[best] as measured        +1.80
+    DSR (measured null)         0.125      P(edge is real) ~ 13%
+    effective trials            20.5 of 44
     PBO                         0.270
     P(OOS loss)                 0.675
     Reality Check p             0.950
     break-even cost            10.4 bps    vs 5 bps assumed
 
-Verdict: **does not survive**. Gross Sharpe is 1.06 and half of it is eaten by
-5 bps of cost. This is the intended outcome of the exercise — a platform that
-only ever confirms signals is not an audit.
+Verdict: **does not survive**. Correcting the independence assumption raises the
+DSR five-fold and changes nothing — 0.125 is not an edge. Gross Sharpe is 1.06
+and half of it is eaten by 5 bps of cost. This is the intended outcome of the
+exercise: a platform that only ever confirms signals is not an audit.
 
 ## The runner seam
 

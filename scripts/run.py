@@ -44,13 +44,19 @@ def main() -> int:
         return 1
 
     r = store.get_json(f"{st.run_id}/audit.json")
-    d, pb, rc = r["deflation"], r["pbo"], r["reality_check"]
+    d, pb, sn = r["deflation"], r["pbo"], r["search_null"]
     print(f"winner  {r['winner']['expr']} @ {r['winner']['rebalance_every_h']}h")
-    print(f"  net Sharpe {d['sr_ann']:+.2f}   vs best-of-{d['n_trials']} noise "
-          f"{d['sr0_ann']:+.2f}")
-    print(f"  DSR {d['dsr']:.3f}   PBO {pb['pbo']:.3f}   "
-          f"P(OOS loss) {pb['prob_oos_loss']:.3f}   RC p {rc['p_value']:.3f}")
-    print(f"  break-even {r['cost_curve']['break_even_bps']:.1f} bps")
+    print(f"  net Sharpe                 {d['sr_ann']:+.2f}")
+    print(f"  E[best] if {d['n_trials']} independent  {d['sr0_ann']:+.2f}"
+          f"   -> DSR {d['dsr']:.3f}")
+    print(f"  E[best] as measured        {sn['sr0_ann']:+.2f}"
+          f"   -> DSR {sn['dsr']:.3f}")
+    print(f"  effective trials           {sn['n_eff']:.1f} of {sn['n_trials']}"
+          f"   (participation ratio {sn['n_eff_participation']:.1f}, "
+          f"mean |corr| {sn['mean_abs_corr']:.2f})")
+    print(f"  PBO {pb['pbo']:.3f}   P(OOS loss) {pb['prob_oos_loss']:.3f}   "
+          f"RC p {sn['rc_p_value']:.3f}")
+    print(f"  break-even                 {r['cost_curve']['break_even_bps']:.1f} bps")
     print(f"VERDICT: {'SURVIVES' if r['survives'] else 'DOES NOT SURVIVE'}")
     return 0
 
