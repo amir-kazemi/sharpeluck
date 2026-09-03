@@ -167,32 +167,23 @@ html { scroll-behavior: smooth; }
 .note strong { color: var(--text-primary); font-weight: 600; }
 .help { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin-top: 5px; }
 
-/* --- The data card: a span, then a funnel ------------------------------- */
+/* --- The data card ------------------------------------------------------ */
 .timeline { margin-top: 12px; }
-.timeline-rule {
-  height: 3px; margin: 7px 0 3px; border-radius: 2px;
-  background: var(--series-1);
+.timeline-rule { height: 3px; margin: 7px 0 3px; border-radius: 2px; background: var(--series-1); }
+
+.prov-grid {
+  margin-top: 18px; display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+.prov-stat {
+  font-size: 22px; font-weight: 600; letter-spacing: -0.02em;
 }
 
-.funnel { margin-top: 18px; display: grid; gap: 8px; }
-.funnel-row {
-  display: grid; grid-template-columns: 4.5em 1fr auto;
-  align-items: center; gap: 12px;
+/* One part-to-whole bar: the track is the archive, the fill is what traded. */
+.pw-track {
+  background: var(--grid); border-radius: 3px; height: 18px; margin: 6px 0 6px;
 }
-.funnel-n {
-  text-align: right; font-weight: 600; font-size: 17px;
-  font-variant-numeric: tabular-nums;
-}
-/* The track is the whole archive; the bar is this subset of it. */
-.funnel-track { background: var(--grid); border-radius: 3px; height: 16px; }
-.funnel-bar {
-  height: 16px; background: var(--series-1);
-  border-radius: 0 4px 4px 0;   /* rounded data-end, square at the baseline */
-  min-width: 3px;
-}
-.funnel-label { color: var(--text-secondary); font-size: 13px; }
-
-@media (max-width: 640px) {
-  .funnel-row { grid-template-columns: 4em 1fr; }
-  .funnel-label { grid-column: 1 / -1; margin-top: -4px; }
+.pw-fill {
+  height: 18px; background: var(--series-1);
+  border-radius: 3px 0 0 3px; min-width: 3px;
 }
