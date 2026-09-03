@@ -80,7 +80,7 @@ read as an edge until they have been deflated.
 
 ## The audit layer
 
-Four independent lenses on one trial table:
+Four independent tests, plus the quantities they are built from:
 
 | | asks |
 |---|---|

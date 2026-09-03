@@ -11,7 +11,7 @@ export function Method() {
     <details className="card"
              onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
       <summary style={{ cursor: "pointer", fontWeight: 600 }}>
-        Method — the four statistics, written out
+        Method — how every number on this page is computed
       </summary>
       {open && (
         <Suspense fallback={<div className="sub" style={{ marginTop: 12 }}>

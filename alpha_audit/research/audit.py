@@ -1,6 +1,6 @@
 """The audit layer: what survives the fact that you looked N times.
 
-Four independent lenses on one trial table.
+Four independent tests, plus the quantities they are built from.
 
   deflate()        Deflated Sharpe Ratio (Bailey & Lopez de Prado 2014).
                    Discounts the best observed Sharpe by the Sharpe you would

@@ -61,7 +61,10 @@ export function Verdict({ audit }: { audit: Audit }) {
         </p>
       </div>
 
-      <div className="tiles" style={{ marginTop: 18 }}>
+      <div className="sub" style={{ marginTop: 20, marginBottom: 6 }}>
+        What was measured
+      </div>
+      <div className="tiles">
         <Tile label="Net Sharpe" value={d.sr_ann.toFixed(2)}
               note={`gross ${(winner.gross_sharpe ?? 0).toFixed(2)}`}
               help="Return per unit of risk, annualised, after costs. Around 1 is respectable; the catch is that a big enough search produces big numbers from nothing." />
@@ -71,6 +74,15 @@ export function Verdict({ audit }: { audit: Audit }) {
         <Tile label="Effective trials" value={`${sn.n_eff.toFixed(1)} / ${d.n_trials}`}
               note={`average correlation ${sn.mean_abs_corr.toFixed(2)}`}
               help="The trials overlap heavily — nested windows, and every signal run beside its own negation — so they amount to fewer genuinely independent looks than the raw count." />
+      </div>
+
+      <div className="sub" style={{ marginTop: 20, marginBottom: 6 }}>
+        The four tests · all must pass
+      </div>
+      <div className="tiles">
+        <Tile label="Deflated Sharpe" value={sn.dsr.toFixed(3)}
+              note={sn.dsr > 0.95 ? "passes (> 0.95)" : "fails (needs > 0.95)"}
+              help="Probability the edge is real once the size of the search is accounted for. This is the headline number above." />
         <Tile label="Overfitting probability" value={pb.pbo.toFixed(2)}
               note={`loses money out of sample ${(pb.prob_oos_loss * 100).toFixed(0)}% of splits`}
               help="Split the history in half many times over: how often does the winner of one half fall below average in the other? 0.5 means picking it was a coin flip." />
