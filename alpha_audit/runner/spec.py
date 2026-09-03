@@ -114,6 +114,9 @@ class RunStatus(BaseModel):
     schema_version: int = 0
     run_id: str
     provenance: Provenance | None = None
+    # PID of a locally-launched dispatcher, so a run whose worker died can be
+    # told apart from one still going. None when an external scheduler owns it.
+    pid: int | None = None
     state: str                 # queued | running | done | failed
     n_trials: int
     n_done: int = 0

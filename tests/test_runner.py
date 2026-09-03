@@ -1,6 +1,8 @@
 """End-to-end: spec -> fan-out -> audit, and the API surface around it."""
 from __future__ import annotations
 
+import os
+
 import polars as pl
 import pytest
 from fastapi.testclient import TestClient
@@ -154,3 +156,43 @@ def test_api_surface(store):
 
     assert client.get("/runs/nope/audit").status_code == 404
     assert client.get("/runs").json() == []
+
+
+def test_a_dead_dispatcher_is_reported_rather_than_left_running(store, tmp_path):
+    """A crashed dispatcher takes no status with it, so without this a run sits
+    at `running` for ever and the UI shows nothing with no explanation."""
+    from api.main import reconcile
+    from alpha_audit.runner.spec import RunStatus
+
+    spec = RunSpec(grids=["cs_zscore(ts_ret(close, [24]))"], rebalances=[24])
+    st = create(spec, store, panel=prepared(hours=24 * 45))
+    st.state = "running"
+    st.pid = 2**22            # a pid that cannot be running
+    store.put_json(f"{st.run_id}/dispatch.log", "MemoryError: out of memory")
+    store.put_json(f"{st.run_id}/status.json", st.model_dump())
+
+    back = reconcile(store, RunStatus.model_validate(
+        store.get_json(f"{st.run_id}/status.json")))
+    assert back.state == "failed"
+    assert "exited after 0/2 trials" in (back.error or "")
+    # ...and it is persisted, not just returned.
+    assert store.get_json(f"{st.run_id}/status.json")["state"] == "failed"
+
+
+def test_reconcile_leaves_live_and_finished_runs_alone(store):
+    from api.main import reconcile
+    from alpha_audit.runner.spec import RunStatus
+
+    spec = RunSpec(grids=["cs_zscore(ts_ret(close, [24]))"], rebalances=[24])
+    st = create(spec, store, panel=prepared(hours=24 * 45))
+
+    live = RunStatus.model_validate({**st.model_dump(), "state": "running",
+                                     "pid": os.getpid()})
+    assert reconcile(store, live).state == "running"
+
+    done = RunStatus.model_validate({**st.model_dump(), "state": "done", "pid": 2**22})
+    assert reconcile(store, done).state == "done"
+
+    unowned = RunStatus.model_validate({**st.model_dump(), "state": "running",
+                                        "pid": None})
+    assert reconcile(store, unowned).state == "running"

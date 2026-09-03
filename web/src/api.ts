@@ -26,6 +26,7 @@ export type UniverseSpec = {
 export type RunStatus = {
   schema_version?: number;
   provenance?: Provenance | null;
+  pid?: number | null;
   run_id: string;
   state: "queued" | "running" | "done" | "failed";
   n_trials: number;
