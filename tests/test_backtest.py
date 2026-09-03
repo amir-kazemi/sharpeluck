@@ -42,6 +42,33 @@ def test_weights_are_dollar_neutral_and_unit_gross():
     assert (live["gross"] - 1.0).abs().max() < 1e-9
 
 
+def test_a_symbol_leaving_the_universe_is_closed_out():
+    """Gross exposure must stay at 1 no matter how the universe churns.
+
+    A name that drops out has a null signal; if that null reaches the
+    forward-fill it carries the old position for ever and the book accumulates
+    every symbol it has ever held. This was invisible on a 53-symbol sample
+    where the universe held 50 names and nothing ever left, and it inflated
+    per-bar return dispersion by two orders of magnitude on the full one.
+    """
+    panel = prepared(hours=24 * 60)
+    cut = panel["ts"].unique().sort()[24 * 40]
+    churned = panel.with_columns(
+        pl.when((pl.col("symbol") == "AAA") & (pl.col("ts") >= cut))
+        .then(False).otherwise(pl.col("in_universe")).alias("in_universe")
+    )
+    w = compute_weights(churned, "cs_zscore(ts_ret(close, 24))", HOURLY)
+
+    dropped = w.filter((pl.col("symbol") == "AAA") & (pl.col("ts") > cut))
+    assert dropped.height > 0
+    assert dropped["w"].abs().max() == 0.0, "a departed symbol kept its position"
+
+    gross = (w.group_by("ts").agg(pl.col("w").abs().sum().alias("g"))
+              .filter(pl.col("g") > 0))
+    assert gross.height > 0
+    assert (gross["g"] - 1.0).abs().max() < 1e-9, "gross exposure drifted from 1"
+
+
 def test_costs_only_ever_reduce_sharpe():
     panel = prepared(hours=24 * 60)
     expr = "cs_zscore(ts_ret(close, 24))"

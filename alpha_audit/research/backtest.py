@@ -59,13 +59,19 @@ def compute_weights(panel: pl.DataFrame, signal, params: BacktestParams) -> pl.D
         (pl.col("sig_rebal") - pl.col("sig_rebal").mean().over("ts")).alias("dm")
     )
     denom = pl.col("dm").abs().sum().over("ts")
+    # A symbol outside the universe has a null signal, so its demeaned value is
+    # null too. That null MUST become an explicit zero here: `w_target` is
+    # forward-filled below, and a null would instead carry the symbol's old
+    # position forward for ever. With a universe that turns over -- 410 symbols
+    # passed through a top-50 universe across the full sample -- that silently
+    # accumulates every name ever held and gross exposure grows without bound.
+    weight = (
+        pl.when(denom > 0)
+        .then((pl.col("dm") / denom).fill_null(0.0))
+        .otherwise(pl.lit(0.0))
+    )
     df = df.with_columns(
-        pl.when(pl.col("is_rebal") & (denom > 0))
-        .then(pl.col("dm") / denom)
-        .when(pl.col("is_rebal"))
-        .then(0.0)
-        .otherwise(None)
-        .alias("w_target")
+        pl.when(pl.col("is_rebal")).then(weight).otherwise(None).alias("w_target")
     )
     # Hold between rebalances; symbols with no signal yet carry no weight.
     return df.with_columns(
