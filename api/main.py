@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from alpha_audit.research import dsl
@@ -121,6 +121,16 @@ def get_audit(run_id: str, s: ResultStore = Depends(store)) -> dict:
 def get_cloud(run_id: str, s: ResultStore = Depends(store)) -> list[dict]:
     """The trial cloud: in-sample vs out-of-sample Sharpe for every CSCV split."""
     return s.get_table(_need(s, f"{run_id}/pbo_cloud.parquet")).to_dicts()
+
+
+@app.delete("/runs/{run_id}", status_code=204)
+def delete_run(run_id: str, s: ResultStore = Depends(store),
+               _: None = Depends(require_write)) -> Response:
+    """Discard a run and its artefacts. Write-gated like submission: a run is
+    tens of megabytes of stored panel, but deleting one is not reversible."""
+    _need(s, f"{run_id}/status.json")
+    s.delete_prefix(run_id)
+    return Response(status_code=204)
 
 
 @app.get("/runs/{run_id}/equity")

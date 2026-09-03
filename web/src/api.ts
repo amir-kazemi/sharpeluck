@@ -150,6 +150,14 @@ async function post<T>(path: string, body: unknown, token?: string): Promise<T> 
   return r.json() as Promise<T>;
 }
 
+async function del(path: string, token?: string): Promise<void> {
+  const r = await fetch(`${BASE}${path}`, {
+    method: "DELETE",
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+  });
+  if (!r.ok) throw new Error(await r.text() || `${r.status} ${r.statusText}`);
+}
+
 export const api = {
   ops: () => get<Ops>("/ops"),
   runs: () => get<RunStatus[]>("/runs"),
@@ -161,4 +169,5 @@ export const api = {
     post<{ n_trials: number }>("/runs/preview", spec),
   submit: (spec: RunSpecInput, token?: string) =>
     post<RunStatus>("/runs", spec, token),
+  remove: (id: string, token?: string) => del(`/runs/${id}`, token),
 };

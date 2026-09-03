@@ -122,6 +122,24 @@ def test_result_shapes_match_what_the_frontend_reads(store):
         store.get_table(f"{st.run_id}/equity.parquet").columns)
 
 
+def test_deleting_a_run_removes_its_artefacts(store):
+    spec = RunSpec(grids=["cs_zscore(ts_ret(close, [24]))"], rebalances=[24])
+    st = create(spec, store, panel=prepared(hours=24 * 45))
+    assert store.exists(f"{st.run_id}/status.json")
+    removed = store.delete_prefix(st.run_id)
+    assert removed > 0
+    assert not store.exists(f"{st.run_id}/status.json")
+    assert store.delete_prefix("does-not-exist") == 0
+
+
+def test_the_store_root_cannot_be_deleted(store):
+    """A run id of '' or '.' must not take the whole store with it."""
+    for bad in ("", ".", "./"):
+        assert store.delete_prefix(bad) == 0
+    with pytest.raises(ValueError):
+        store.delete_prefix("../escape")
+
+
 def test_api_surface(store):
     client = TestClient(__import__("api.main", fromlist=["app"]).app)
     assert client.get("/healthz").json()["ok"] is True

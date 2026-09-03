@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -30,6 +31,8 @@ class ResultStore(ABC):
     def exists(self, key: str) -> bool: ...
     @abstractmethod
     def list_keys(self, prefix: str) -> list[str]: ...
+    @abstractmethod
+    def delete_prefix(self, prefix: str) -> int: ...
 
 
 class LocalStore(ResultStore):
@@ -75,3 +78,13 @@ class LocalStore(ResultStore):
         return sorted(
             str(p.relative_to(self.root)) for p in base.rglob("*") if p.is_file()
         )
+
+    def delete_prefix(self, prefix: str) -> int:
+        """Remove a whole run. Each run stores its own copy of the prepared
+        panel, so they are tens of megabytes each and worth clearing out."""
+        base = self._p(prefix)
+        if base == self.root or not base.exists():
+            return 0
+        n = sum(1 for p in base.rglob("*") if p.is_file())
+        shutil.rmtree(base)
+        return n

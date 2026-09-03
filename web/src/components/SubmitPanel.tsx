@@ -12,13 +12,14 @@ const DEFAULT_GRIDS = [
 /** Submitting a run costs compute, so the trial budget is shown before it is
  *  spent -- and the sign of each signal is expanded automatically, which is why
  *  the count is double what the expressions look like. */
-export function SubmitPanel({ onSubmitted }: { onSubmitted: (id: string) => void }) {
+export function SubmitPanel(
+  { onSubmitted, token }: { onSubmitted: (id: string) => void; token: string },
+) {
   const qc = useQueryClient();
   const [text, setText] = useState(DEFAULT_GRIDS);
   const [rebalances, setRebalances] = useState<number[]>([6, 24]);
   const [cost, setCost] = useState(5);
   const [label, setLabel] = useState("");
-  const [token, setToken] = useState("");
   // The universe is a research decision, not a constant: whether an edge
   // survives at 200 names as well as 50 is exactly the kind of question this
   // platform exists to ask.
@@ -87,11 +88,6 @@ export function SubmitPanel({ onSubmitted }: { onSubmitted: (id: string) => void
           <span className="sub">Label</span>
           <input value={label} placeholder="optional" style={{ width: 150 }}
                  onChange={(e) => setLabel(e.target.value)} />
-        </label>
-        <label className="row" style={{ gap: 6 }}>
-          <span className="sub">Token</span>
-          <input value={token} placeholder="if required" type="password" style={{ width: 130 }}
-                 onChange={(e) => setToken(e.target.value)} />
         </label>
       </div>
 

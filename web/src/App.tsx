@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, SCHEMA_VERSION, type RunStatus } from "./api";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ProvenanceBar } from "./components/Provenance";
+import { Method } from "./components/Method";
 import { Figure } from "./components/Figure";
 import { SubmitPanel } from "./components/SubmitPanel";
 import { TrialTable } from "./components/TrialTable";
@@ -13,9 +14,13 @@ import { EquityCurve, EquityTable } from "./charts/EquityCurve";
 import { TrialSpread } from "./charts/TrialSpread";
 
 function ThemeToggle() {
-  const [theme, setTheme] = useState<string>(
-    () => localStorage.getItem("theme") ?? "system",
-  );
+  const [theme, setTheme] = useState<string>(() => {
+    try { return localStorage.getItem("theme") ?? "system"; } catch { return "system"; }
+  });
+  // "system" looks identical to whichever mode the OS is in, which is confusing
+  // when they coincide -- so say which one it resolved to.
+  const osDark = typeof matchMedia === "function"
+    && matchMedia("(prefers-color-scheme: dark)").matches;
   useEffect(() => {
     const r = document.documentElement;
     if (theme === "system") r.removeAttribute("data-theme");
@@ -26,8 +31,9 @@ function ThemeToggle() {
     <div className="row" style={{ gap: 4 }}>
       {(["light", "system", "dark"] as const).map((t) => (
         <button key={t} aria-pressed={theme === t} onClick={() => setTheme(t)}
-                style={{ padding: "3px 9px", fontSize: 12 }}>
-          {t}
+                style={{ padding: "3px 9px", fontSize: 12 }}
+                title={t === "system" ? `follows your OS (currently ${osDark ? "dark" : "light"})` : `always ${t}`}>
+          {t === "system" ? `system (${osDark ? "dark" : "light"})` : t}
         </button>
       ))}
     </div>
@@ -35,7 +41,17 @@ function ThemeToggle() {
 }
 
 export default function App() {
+  const qc = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
+  // Runs written by an older build are readable but not by these charts, so
+  // they are hidden unless asked for rather than left to confuse the picker.
+  const [showAll, setShowAll] = useState(false);
+  const [token, setToken] = useState<string>(() => {
+    try { return localStorage.getItem("token") ?? ""; } catch { return ""; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("token", token); } catch { /* private mode */ }
+  }, [token]);
 
   const runs = useQuery({
     queryKey: ["runs"],
@@ -49,6 +65,9 @@ export default function App() {
   const loadable = (r: RunStatus) =>
     r.state === "done" && (r.schema_version ?? 0) === SCHEMA_VERSION;
 
+  const visible = (runs.data ?? []).filter(
+    (r) => showAll || loadable(r) || r.state === "running" || r.state === "queued",
+  );
   const id = selected ?? runs.data?.find(loadable)?.run_id ?? null;
   const run = runs.data?.find((r) => r.run_id === id) ?? null;
   const ready = !!run && loadable(run);
@@ -60,6 +79,14 @@ export default function App() {
   const trials = useQuery({ queryKey: ["trials", id], queryFn: () => api.trials(id!), enabled: !!id && ready });
   const cloud = useQuery({ queryKey: ["cloud", id], queryFn: () => api.cloud(id!), enabled: !!id && ready });
   const equity = useQuery({ queryKey: ["equity", id], queryFn: () => api.equity(id!), enabled: !!id && ready });
+
+  const remove = useMutation({
+    mutationFn: (rid: string) => api.remove(rid, token || undefined),
+    onSuccess: () => {
+      setSelected(null);
+      qc.invalidateQueries({ queryKey: ["runs"] });
+    },
+  });
 
   const busy = audit.isFetching || trials.isFetching || cloud.isFetching || equity.isFetching;
 
@@ -78,8 +105,8 @@ export default function App() {
         <span className="sub">Run</span>
         <select value={id ?? ""} onChange={(e) => setSelected(e.target.value || null)}
                 style={{ minWidth: 340 }}>
-          {(runs.data ?? []).length === 0 && <option value="">no runs yet</option>}
-          {(runs.data ?? []).map((r) => (
+          {visible.length === 0 && <option value="">no runs yet</option>}
+          {visible.map((r) => (
             <option key={r.run_id} value={r.run_id}>
               {r.created_at.replace("T", " ").slice(0, 16)} · {r.n_trials} trials
               {r.label ? ` · ${r.label}` : ""} · {r.state}
@@ -91,6 +118,29 @@ export default function App() {
         {run && run.state === "running" && (
           <span className="sub">{run.n_done}/{run.n_trials} trials complete</span>
         )}
+        <label className="row" style={{ gap: 5 }}>
+          <input type="checkbox" checked={showAll} style={{ width: 14, height: 14 }}
+                 onChange={(e) => setShowAll(e.target.checked)} />
+          <span className="sub">
+            show all ({(runs.data ?? []).length - visible.length} hidden)
+          </span>
+        </label>
+        <button disabled={!id || remove.isPending}
+                onClick={() => {
+                  if (id && confirm(`Delete run ${id}? This cannot be undone.`)) {
+                    remove.mutate(id);
+                  }
+                }}
+                style={{ padding: "3px 9px", fontSize: 12 }}
+                title="Each run stores its own copy of the prepared panel, tens of MB">
+          {remove.isPending ? "deleting…" : "delete run"}
+        </button>
+        <label className="row" style={{ gap: 6 }}>
+          <span className="sub">token</span>
+          <input value={token} type="password" placeholder="if required"
+                 style={{ width: 110 }}
+                 onChange={(e) => setToken(e.target.value)} />
+        </label>
       </div>
 
       {outdated && (
@@ -207,7 +257,8 @@ export default function App() {
           research decision, and the point of this page is that they all change the
           answer.
         </p>
-        <SubmitPanel onSubmitted={setSelected} />
+        <SubmitPanel onSubmitted={setSelected} token={token} />
+        <Method />
       </div>
       </ErrorBoundary>
     </div>
