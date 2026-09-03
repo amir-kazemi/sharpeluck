@@ -60,8 +60,10 @@ export function SubmitPanel(
     <section className="card">
       <h3>New run</h3>
       <div className="sub">
-        One expression per line. A list-valued parameter such as <code>[12, 24, 72]</code>{" "}
-        expands into one trial per value.
+        One expression per line. A list-valued parameter such as{" "}
+        <code>[12, 24, 72]</code> expands into one trial per value, so a longer
+        list is a wider search. Note that widening it is not free: every extra
+        trial raises the Sharpe the winner has to beat.
       </div>
 
       <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)}
@@ -121,8 +123,10 @@ export function SubmitPanel(
         </button>
         <span className="sub">
           {preview.data
-            ? `${preview.data.n_trials} trials (each signal is run alongside its negation) · `
-              + `universe rebuilt for this run`
+            ? `${preview.data.breakdown.expressions} expressions × `
+              + `${preview.data.breakdown.signs} signs × `
+              + `${preview.data.breakdown.rebalances} rebalance frequencies = `
+              + `${preview.data.n_trials} trials`
             : preview.isFetching ? "counting trials…" : "—"}
         </span>
       </div>

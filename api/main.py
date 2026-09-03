@@ -117,10 +117,19 @@ def ops() -> dict:
 
 @app.post("/runs/preview")
 def preview(spec: RunSpec) -> dict:
-    """Expand a spec without running it, so the UI can show the trial budget
-    before anyone spends it."""
+    """Expand a spec without running it, so the UI can show the trial budget --
+    and where it came from -- before anyone spends it."""
     t = spec.trials()
-    return {"n_trials": len(t), "trials": [x.model_dump() for x in t]}
+    n_expr = sum(len(dsl.expand(g)) for g in spec.grids)
+    return {
+        "n_trials": len(t),
+        "breakdown": {
+            "expressions": n_expr,
+            "signs": len(spec.signs),
+            "rebalances": len(spec.rebalances),
+        },
+        "trials": [x.model_dump() for x in t],
+    }
 
 
 @app.post("/runs", status_code=202)

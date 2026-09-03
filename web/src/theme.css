@@ -64,14 +64,14 @@ body {
   margin: 0;
   background: var(--page);
   color: var(--text-primary);
-  font: 13.5px/1.55 var(--mono);
+  font: 15px/1.6 var(--mono);
   font-variant-ligatures: none;
 }
 h1, h2, h3 { font-weight: 600; margin: 0; }
-h1 { font-size: 23px; letter-spacing: -0.02em; }
+h1 { font-size: 26px; letter-spacing: -0.02em; }
 a { color: var(--series-1); }
 
-.wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 24px 20px 64px; }
 .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
@@ -86,29 +86,29 @@ a { color: var(--series-1); }
    of the same weight do not read as heading-and-body no matter which is
    nominally larger, so hierarchy comes from case and tracking as well as size. */
 .card h3 {
-  font-size: 15px;
+  font-size: 16px;
   text-transform: uppercase;
   letter-spacing: 0.09em;
 }
 .card > .sub:first-of-type { margin-top: 4px; }
 summary { text-transform: uppercase; letter-spacing: 0.09em; font-size: 14px; }
-.sub { color: var(--text-secondary); font-size: 12.5px; margin-top: 2px; }
+.sub { color: var(--text-secondary); font-size: 13.5px; margin-top: 2px; }
 .muted { color: var(--muted); }
 
-.hero { font-size: 50px; font-weight: 600; line-height: 1.05; letter-spacing: -0.03em; }
+.hero { font-size: 56px; font-weight: 600; line-height: 1.05; letter-spacing: -0.03em; }
 /* Formulas: the notation is simple enough to set in the page's own monospace,
    which needs no maths typesetter and matches everything around it. */
 .formula {
-  font-size: 12.5px; line-height: 1.9; margin: 6px 0 2px;
+  font-size: 13.5px; line-height: 1.9; margin: 6px 0 2px;
   padding: 8px 10px; overflow-x: auto; white-space: pre;
   background: var(--page); border: 1px solid var(--border); border-radius: 7px;
   color: var(--text-primary);
 }
 .tile-label {
-  color: var(--text-secondary); font-size: 11px;
+  color: var(--text-secondary); font-size: 12px;
   text-transform: uppercase; letter-spacing: 0.07em;
 }
-.tile-value { font-size: 26px; font-weight: 600; margin-top: 4px; letter-spacing: -0.02em; }
+.tile-value { font-size: 28px; font-weight: 600; margin-top: 4px; letter-spacing: -0.02em; }
 
 button, select, input, textarea {
   font: inherit;
@@ -126,12 +126,12 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 textarea { width: 100%; resize: vertical; font-size: 12.5px; }
 
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
-th, td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+th, td { text-align: right; padding: 6px 9px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
 th:first-child, td:first-child { text-align: left; font-variant-numeric: normal; }
-th { color: var(--text-secondary); font-weight: 500; font-size: 12px; cursor: pointer; user-select: none; }
+th { color: var(--text-secondary); font-weight: 500; font-size: 13px; cursor: pointer; user-select: none; }
 tbody tr:hover { background: var(--wash); }
 .scroll { overflow-x: auto; max-height: 380px; overflow-y: auto; }
-code { font-size: 12.5px; color: var(--text-secondary); }
+code { font-size: 13.5px; color: var(--text-secondary); }
 
 .pill {
   display: inline-flex; align-items: center; gap: 6px;
@@ -149,14 +149,11 @@ code { font-size: 12.5px; color: var(--text-secondary); }
 
 /* Explanatory prose. Sits between cards to carry the argument from one to the
    next; capped in width because long measures are unreadable. */
-/* Prose is capped at a readable measure -- long monospace lines are miserable
-   to read -- which leaves space to its right. A rule down the left edge makes
-   that space read as a deliberate text column rather than a layout accident. */
+/* Full width, with a rule down the left edge to group it as prose. */
 .note {
   color: var(--text-secondary);
-  font-size: 12.5px;
-  line-height: 1.75;
-  max-width: 84ch;
+  font-size: 14.5px;
+  line-height: 1.7;
   margin: 2px 0 -2px;
   padding: 2px 0 2px 14px;
   border-left: 2px solid var(--grid);
@@ -164,4 +161,4 @@ code { font-size: 12.5px; color: var(--text-secondary); }
 /* Inside a card the rule would double up with the card's own border. */
 .card .note { border-left: none; padding-left: 0; }
 .note strong { color: var(--text-primary); font-weight: 600; }
-.help { color: var(--muted); font-size: 11.5px; line-height: 1.45; margin-top: 4px; }
+.help { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin-top: 5px; }

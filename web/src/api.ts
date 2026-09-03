@@ -167,7 +167,10 @@ export const api = {
   cloud: (id: string) => get<CloudPoint[]>(`/runs/${id}/cloud`),
   equity: (id: string) => get<EquityPoint[]>(`/runs/${id}/equity`),
   preview: (spec: RunSpecInput) =>
-    post<{ n_trials: number }>("/runs/preview", spec),
+    post<{
+      n_trials: number;
+      breakdown: { expressions: number; signs: number; rebalances: number };
+    }>("/runs/preview", spec),
   submit: (spec: RunSpecInput, token?: string) =>
     post<RunStatus>("/runs", spec, token),
   remove: (id: string, token?: string) => del(`/runs/${id}`, token),
