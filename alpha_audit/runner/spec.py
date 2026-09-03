@@ -6,7 +6,7 @@ remembered.
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ..research import dsl
 from ..research.universe import UniverseRules
@@ -89,6 +89,22 @@ class RunSpec(BaseModel):
             if "{}" not in s:
                 raise ValueError(f"sign template {s!r} must contain '{{}}'")
         return v
+
+    @model_validator(mode="after")
+    def _enough_to_audit(self) -> "RunSpec":
+        """Every statistic here is about choosing among trials, so a single
+        trial has nothing to audit -- cross-validation cannot rank one thing and
+        the reality check has no maximum to take. Refuse it up front rather than
+        letting the run start and die in the audit."""
+        n = len(self.trials())
+        if n < 2:
+            raise ValueError(
+                "a run needs at least 2 trials to audit -- there is nothing to "
+                "deflate when only one was tried. Widen a parameter list "
+                "(e.g. [24, 72]), add another rebalance frequency, or keep "
+                "'also test each signal negated' on."
+            )
+        return self
 
     def trials(self) -> list[TrialSpec]:
         out = []

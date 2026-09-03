@@ -44,6 +44,21 @@ def test_the_universe_is_part_of_the_experiment(store):
     assert store.get_json(f"{st.run_id}/spec.json")["universe"]["max_symbols"] == 2
 
 
+def test_a_single_trial_run_is_refused_up_front():
+    """The form can express it, so the spec has to reject it: one trial gives
+    CSCV nothing to rank and the reality check no maximum to take, and the run
+    would otherwise start and then die inside the audit."""
+    with pytest.raises(ValueError, match="at least 2 trials"):
+        RunSpec(grids=["cs_zscore(ts_ret(close, 24))"], signs=["{}"], rebalances=[24])
+    # ...but any of the three ways of widening it is accepted.
+    assert len(RunSpec(grids=["cs_zscore(ts_ret(close, [24, 72]))"], signs=["{}"],
+                       rebalances=[24]).trials()) == 2
+    assert len(RunSpec(grids=["cs_zscore(ts_ret(close, 24))"],
+                       rebalances=[24]).trials()) == 2
+    assert len(RunSpec(grids=["cs_zscore(ts_ret(close, 24))"], signs=["{}"],
+                       rebalances=[6, 24]).trials()) == 2
+
+
 def test_spec_rejects_an_unparseable_grid():
     with pytest.raises(ValueError):
         RunSpec(grids=["cs_zscore(nope(close, 1))"])
