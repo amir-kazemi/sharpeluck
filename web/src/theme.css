@@ -99,8 +99,8 @@ summary { text-transform: uppercase; letter-spacing: 0.09em; font-size: 14px; }
 /* Formulas: the notation is simple enough to set in the page's own monospace,
    which needs no maths typesetter and matches everything around it. */
 .formula {
-  font-size: 13.5px; line-height: 1.9; margin: 6px 0 2px;
-  padding: 8px 10px; overflow-x: auto; white-space: pre;
+  /* KaTeX renders its own type; the box just holds and scrolls it. */
+  margin: 8px 0 4px; padding: 12px 14px; overflow-x: auto;
   background: var(--page); border: 1px solid var(--border); border-radius: 7px;
   color: var(--text-primary);
 }
