@@ -50,15 +50,16 @@ export function ProvenanceBar({ p, u }: { p: Provenance; u?: UniverseSpec }) {
         </div>
       </div>
 
-      {/* The funnel from everything that ever listed down to what is held. */}
+      {/* Counts of pairs, from every one the archive lists down to how many are
+          held at a given moment. The first two are cumulative over the sample
+          and the third is an average at a point in time, which is why the last
+          bar is so much shorter -- and is the point of the figure. */}
       <div className="funnel">
         <Bar n={p.n_symbols_available} of={p.n_symbols_available}
-             label="USDT pairs in the archive, delisted ones included" />
+             label="in the archive" />
         <Bar n={p.n_symbols_traded} of={p.n_symbols_available}
-             label="entered the universe at some point in this sample" />
-        <Bar n={held} of={p.n_symbols_available}
-             label="held at any one time — so the cross-section turns over"
-        />
+             label="traded, ever" />
+        <Bar n={held} of={p.n_symbols_available} label="traded at once" />
       </div>
 
       {u && (
@@ -73,9 +74,13 @@ export function ProvenanceBar({ p, u }: { p: Provenance; u?: UniverseSpec }) {
             ].map((t) => <span key={t} className="pill">{t}</span>)}
           </div>
           <div className="sub" style={{ marginTop: 10 }}>
-            Each rebalance is rebuilt from data available at that moment, so pairs
-            that were later delisted are still in it — which is why{" "}
-            {p.n_symbols_traded} pairs pass through {held} slots.
+            The first two bars count pairs over the whole sample; the last is how
+            many are held at any given moment — so{" "}
+            <strong>{p.n_symbols_traded} pairs rotate through {held} slots,
+            turning the cross-section over{" "}
+            {(p.n_symbols_traded / Math.max(1, held)).toFixed(1)}×</strong>. The
+            universe is rebuilt at each rebalance from data available then, which
+            is why pairs that were later delisted are still in it.
           </div>
         </>
       )}
