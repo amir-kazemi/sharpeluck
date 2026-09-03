@@ -86,7 +86,11 @@ def list_archive_symbols(market: str = "spot", quote: str | None = "USDT") -> li
 
 
 def month_url(symbol: str, month: str, market: str = "spot", interval: str = "1m") -> str:
-    return f"{BASE}/data/{market}/monthly/klines/{symbol}/{interval}/{symbol}-{interval}-{month}.zip"
+    # The archive lists a handful of non-ASCII tickers (e.g. the Chinese-named
+    # pair that failed 55 downloads in the first full backfill), so the symbol
+    # is percent-encoded rather than interpolated raw into the path.
+    q = urllib.parse.quote(symbol, safe="")
+    return f"{BASE}/data/{market}/monthly/klines/{q}/{interval}/{q}-{interval}-{month}.zip"
 
 
 def bronze_path(symbol: str, month: str, interval: str = "1m") -> Path:

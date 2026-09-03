@@ -98,3 +98,13 @@ def test_download_month_writes_atomically(monkeypatch, tmp_path):
     calls = _urlopen(monkeypatch, [b"different"])
     assert bb.download_month("BTCUSDT", "2024-01") == p
     assert len(calls) == 0
+
+
+def test_non_ascii_symbols_are_percent_encoded():
+    """The archive really does list a Chinese-named pair; interpolating it raw
+    raises UnicodeEncodeError inside http.client rather than 404ing."""
+    url = bb.month_url("\u5e01\u5b89\u4eba\u751fUSDT", "2022-01")
+    assert "%" in url and url.isascii()
+    assert url.endswith("-1m-2022-01.zip")
+    assert bb.month_url("BTCUSDT", "2024-01").endswith(
+        "/klines/BTCUSDT/1m/BTCUSDT-1m-2024-01.zip")
