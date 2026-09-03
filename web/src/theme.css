@@ -187,3 +187,10 @@ html { scroll-behavior: smooth; }
   height: 18px; background: var(--series-1);
   border-radius: 3px 0 0 3px; min-width: 3px;
 }
+
+.builder-row {
+  padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--page);
+}
+.builder-row .help { margin-top: 6px; }

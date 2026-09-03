@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type RunSpecInput } from "../api";
+import {
+  DEFAULT_ROWS, SignalBuilder, type Row, rowsToGrids,
+} from "./SignalBuilder";
 
 const REBALANCES = [1, 6, 24];
 const DEFAULT_GRIDS = [
@@ -16,6 +19,11 @@ export function SubmitPanel(
   { onSubmitted, token }: { onSubmitted: (id: string) => void; token: string },
 ) {
   const qc = useQueryClient();
+  // Guided by default; the text mode stays for anyone who prefers the syntax,
+  // and the builder prints the expression it produces so the two stay legible
+  // to each other.
+  const [mode, setMode] = useState<"guided" | "text">("guided");
+  const [rows, setRows] = useState<Row[]>(DEFAULT_ROWS);
   const [text, setText] = useState(DEFAULT_GRIDS);
   const [rebalances, setRebalances] = useState<number[]>([6, 24]);
   const [bothSigns, setBothSigns] = useState(true);
@@ -29,7 +37,9 @@ export function SubmitPanel(
   const [minHistoryDays, setMinHistoryDays] = useState(30);
 
   const spec: RunSpecInput = useMemo(() => ({
-    grids: text.split("\n").map((s) => s.trim()).filter(Boolean),
+    grids: mode === "guided"
+      ? rowsToGrids(rows)
+      : text.split("\n").map((s) => s.trim()).filter(Boolean),
     signs: bothSigns ? ["{}", "neg({})"] : ["{}"],
     rebalances,
     cost_bps: cost,
@@ -39,7 +49,8 @@ export function SubmitPanel(
       min_history_h: minHistoryDays * 24,
     },
     label: label || null,
-  }), [text, bothSigns, rebalances, cost, label, maxSymbols, minAdv, minHistoryDays]);
+  }), [mode, rows, text, bothSigns, rebalances, cost, label,
+       maxSymbols, minAdv, minHistoryDays]);
 
   const ops = useQuery({ queryKey: ["ops"], queryFn: api.ops, staleTime: Infinity });
   const preview = useQuery({
@@ -60,16 +71,31 @@ export function SubmitPanel(
 
   return (
     <section className="card">
-      <h3>New run</h3>
-      <div className="sub">
-        One expression per line. A list-valued parameter such as{" "}
-        <code>[12, 24, 72]</code> expands into one trial per value, so a longer
-        list is a wider search. Note that widening it is not free: every extra
-        trial raises the Sharpe the winner has to beat.
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h3>New run</h3>
+          <div className="sub">
+            Each signal ranks every coin in the universe, then buys the top and
+            shorts the bottom. Picking more windows widens the search — which is
+            not free: every extra trial raises the Sharpe the winner has to beat.
+          </div>
+        </div>
+        <div className="row" style={{ gap: 6 }}>
+          {(["guided", "text"] as const).map((m) => (
+            <button key={m} aria-pressed={mode === m} onClick={() => setMode(m)}
+                    style={{ padding: "3px 9px", fontSize: 12 }}>
+              {m === "guided" ? "Guided" : "Expression"}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)}
-                style={{ marginTop: 12 }} spellCheck={false} />
+      <div style={{ marginTop: 14 }}>
+        {mode === "guided"
+          ? <SignalBuilder rows={rows} onChange={setRows} />
+          : <textarea rows={4} value={text} spellCheck={false}
+                      onChange={(e) => setText(e.target.value)} />}
+      </div>
 
       <div className="row" style={{ marginTop: 12, gap: 18 }}>
         <span className="row" style={{ gap: 6 }}>
@@ -145,7 +171,7 @@ export function SubmitPanel(
         </p>
       )}
 
-      {ops.data && (
+      {ops.data && mode === "text" && (
         <details style={{ marginTop: 14 }}>
           <summary className="sub" style={{ cursor: "pointer" }}>The signal language</summary>
           <div className="sub" style={{ marginTop: 8, lineHeight: 1.9 }}>
