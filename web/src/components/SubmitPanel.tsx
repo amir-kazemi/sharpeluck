@@ -18,6 +18,7 @@ export function SubmitPanel(
   const qc = useQueryClient();
   const [text, setText] = useState(DEFAULT_GRIDS);
   const [rebalances, setRebalances] = useState<number[]>([6, 24]);
+  const [bothSigns, setBothSigns] = useState(true);
   const [cost, setCost] = useState(5);
   const [label, setLabel] = useState("");
   // The universe is a research decision, not a constant: whether an edge
@@ -29,6 +30,7 @@ export function SubmitPanel(
 
   const spec: RunSpecInput = useMemo(() => ({
     grids: text.split("\n").map((s) => s.trim()).filter(Boolean),
+    signs: bothSigns ? ["{}", "neg({})"] : ["{}"],
     rebalances,
     cost_bps: cost,
     universe: {
@@ -37,7 +39,7 @@ export function SubmitPanel(
       min_history_h: minHistoryDays * 24,
     },
     label: label || null,
-  }), [text, rebalances, cost, label, maxSymbols, minAdv, minHistoryDays]);
+  }), [text, bothSigns, rebalances, cost, label, maxSymbols, minAdv, minHistoryDays]);
 
   const ops = useQuery({ queryKey: ["ops"], queryFn: api.ops, staleTime: Infinity });
   const preview = useQuery({
@@ -81,6 +83,12 @@ export function SubmitPanel(
             </button>
           ))}
         </span>
+        <label className="row" style={{ gap: 6 }}
+               title="Trying a signal, finding it backwards, and reporting the flipped version is a free doubling of the search. Counting both keeps it honest.">
+          <input type="checkbox" checked={bothSigns} style={{ width: 14, height: 14 }}
+                 onChange={(e) => setBothSigns(e.target.checked)} />
+          <span className="sub">also test each signal negated</span>
+        </label>
         <label className="row" style={{ gap: 6 }}>
           <span className="sub">Cost (bps)</span>
           <input type="number" min={0} step={1} value={cost} style={{ width: 74 }}

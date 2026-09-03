@@ -114,6 +114,9 @@ export type EquityPoint = { ts: string; equity: number; equity_gross: number };
 
 export type RunSpecInput = {
   grids: string[];
+  /** Sign templates, each containing "{}". Both entries means every signal is
+   *  also run negated, which doubles the trial count. */
+  signs?: string[];
   rebalances: number[];
   cost_bps: number;
   universe?: Partial<UniverseSpec>;
