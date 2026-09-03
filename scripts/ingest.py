@@ -14,7 +14,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from concurrent.futures import ThreadPoolExecutor
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -47,16 +48,49 @@ def main() -> int:
     print(f"symbols: {len(symbols)}  months: {args.months}")
 
     jobs = [(s, m) for s in symbols for m in args.months]
+    t0 = time.time()
+    got, errors = [], []
     with ThreadPoolExecutor(args.workers) as ex:
-        got = list(ex.map(lambda j: (j, bb.download_month(*j)), jobs))
+        futs = {ex.submit(bb.download_month, s, m): (s, m) for s, m in jobs}
+        for i, f in enumerate(as_completed(futs), 1):
+            try:
+                got.append((futs[f], f.result()))
+            except Exception as e:
+                # One exhausted symbol-month must not end the backfill; collect
+                # it, report it, and let the rerun pick it up.
+                errors.append((futs[f], repr(e)))
+                got.append((futs[f], None))
+            if i % 500 == 0 or i == len(jobs):
+                ok = sum(p is not None for _, p in got)
+                print(f"  bronze {i}/{len(jobs)}  ({ok} present)  {time.time()-t0:.0f}s",
+                      flush=True)
     present = [(j, p) for j, p in got if p is not None]
     missing = [j for j, p in got if p is None]
     mb = sum(p.stat().st_size for _, p in present) / 1e6
     print(f"bronze: {len(present)}/{len(jobs)} files, {mb:.0f} MB "
-          f"({len(missing)} symbol-months not listed upstream)")
+          f"({len(missing) - len(errors)} symbol-months not listed upstream, "
+          f"{len(errors)} failed after retries)", flush=True)
+    for (sym, month), err in errors[:10]:
+        print(f"  failed {sym} {month}: {err}", flush=True)
 
-    for (sym, month), path in present:
+    # Silver is rebuilt only where it is missing or older than its source, so a
+    # requeued job resumes instead of redoing hours of work.
+    def to_silver(item):
+        (sym, month), path = item
+        out = sv.silver_path(sym, month)
+        if out.exists() and out.stat().st_mtime >= path.stat().st_mtime:
+            return 0
         sv.build_month(path, sym, month)
+        return 1
+
+    t1 = time.time()
+    built = 0
+    with ThreadPoolExecutor(args.workers) as ex:
+        for i, n in enumerate(ex.map(to_silver, present), 1):
+            built += n
+            if i % 1000 == 0 or i == len(present):
+                print(f"  silver {i}/{len(present)}  ({built} rebuilt)  "
+                      f"{time.time()-t1:.0f}s", flush=True)
     panel = sv.load_panel()
     print(f"silver: {panel.height:,} hourly bars, {panel['symbol'].n_unique()} symbols, "
           f"{panel['ts'].min()} -> {panel['ts'].max()}")
@@ -75,7 +109,8 @@ def main() -> int:
         "months": args.months,
         "symbols_requested": len(symbols),
         "bronze_files": len(present),
-        "missing_symbol_months": [f"{s}/{m}" for s, m in missing],
+        "missing_symbol_months": len(missing),
+        "download_errors": [f"{s}/{m}: {e}" for (s, m), e in errors],
         "silver_bars": panel.height,
         "universe_rows": u.height,
     }
