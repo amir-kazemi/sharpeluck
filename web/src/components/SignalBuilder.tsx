@@ -102,6 +102,9 @@ export function SignalBuilder(
                     style={{ padding: "3px 8px", fontSize: 12 }}>
               {r.cs === "zscore" ? "by size" : "by order"}
             </button>
+            <a href="#guide/weighting" className="help" style={{ marginLeft: 2 }}>
+              worked example ↗
+            </a>
             {rows.length > 1 && (
               <button onClick={() => onChange(rows.filter((_, j) => j !== i))}
                       title="remove this signal"

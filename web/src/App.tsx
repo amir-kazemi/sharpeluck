@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, SCHEMA_VERSION, type RunStatus } from "./api";
 import { explainTrials } from "./describe";
@@ -13,6 +13,34 @@ import { CloudTable, TrialCloud } from "./charts/TrialCloud";
 import { CostCurve, CostTable } from "./charts/CostCurve";
 import { EquityCurve, EquityTable } from "./charts/EquityCurve";
 import { TrialSpread } from "./charts/TrialSpread";
+
+const Guide = lazy(() => import("./pages/Guide"));
+
+function useRoute() {
+  const parse = () => {
+    const h = window.location.hash;
+    if (!h.startsWith("#guide")) return { page: "app" as const };
+    const anchor = h.startsWith("#guide/") ? h.slice(7) : undefined;
+    return { page: "guide" as const, anchor };
+  };
+  const [route, setRoute] = useState(parse);
+  useEffect(() => {
+    const onChange = () => setRoute(parse());
+    window.addEventListener("hashchange", onChange);
+    return () => window.removeEventListener("hashchange", onChange);
+  }, []);
+  useEffect(() => {
+    if (route.page === "guide" && route.anchor) {
+      // The section has to exist in the DOM first; Guide is a lazy chunk, so
+      // its first paint can land a tick after this effect runs.
+      const id = route.anchor;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        document.getElementById(id)?.scrollIntoView({ block: "start" });
+      }));
+    }
+  }, [route]);
+  return route;
+}
 
 function ThemeToggle() {
   const [theme, setTheme] = useState<string>(() => {
@@ -42,6 +70,7 @@ function ThemeToggle() {
 }
 
 export default function App() {
+  const route = useRoute();
   const qc = useQueryClient();
   const [selected, setSelected] = useState<string | null>(null);
   // Runs written by an older build are readable but not by these charts, so
@@ -99,13 +128,30 @@ export default function App() {
           <div className="sub">How much of your Sharpe is selection bias?</div>
         </div>
         <div className="row" style={{ gap: 10 }}>
-          <a href="#new-run" className="pill" style={{ textDecoration: "none" }}>
-            configure a run ↓
-          </a>
+          {route.page === "guide" ? (
+            <a href="#" className="pill" style={{ textDecoration: "none" }}>
+              ← back to the app
+            </a>
+          ) : (
+            <>
+              <a href="#guide" className="pill" style={{ textDecoration: "none" }}>
+                how this works
+              </a>
+              <a href="#new-run" className="pill" style={{ textDecoration: "none" }}>
+                configure a run ↓
+              </a>
+            </>
+          )}
           <ThemeToggle />
         </div>
       </header>
 
+{route.page === "guide" ? (
+        <Suspense fallback={<p className="sub">loading…</p>}>
+          <Guide />
+        </Suspense>
+      ) : (
+        <>
       {/* One filter row, above everything it scopes. */}
       <div className="row" style={{ margin: "18px 0 16px", gap: 10 }}>
         <span className="sub">Run</span>
@@ -187,10 +233,11 @@ export default function App() {
           <>
             <p className="note">
               The search covered{" "}
-              <strong>{trials.data ? explainTrials(trials.data) : "…"}</strong> —
-              every signal is run alongside its own negation, because trying one,
-              finding it backwards, and reporting the flipped version is a free
-              doubling of the search. Every part of that is editable in{" "}
+              <strong>{trials.data ? explainTrials(trials.data) : "…"}</strong>{" "}
+              (<a href="#guide/trial-grid">why that many ↗</a>) — every signal is
+              run alongside its own negation, because trying one, finding it
+              backwards, and reporting the flipped version is a free doubling of
+              the search. Every part of that is editable in{" "}
               <a href="#new-run">the form at the bottom of this page</a>. The
               strategy below scored best <em>in
               sample</em>, so it is the one you would have picked; everything
@@ -198,6 +245,9 @@ export default function App() {
             </p>
             <Figure title="Verdict" chart={<Verdict audit={audit.data} />}
                     table={<AuditTable audit={audit.data} />} />
+            <p className="sub" style={{ margin: "-6px 2px 0" }}>
+              <a href="#guide/four-tests">what these four numbers mean, worked through by hand ↗</a>
+            </p>
           </>
         )}
 
@@ -273,6 +323,8 @@ export default function App() {
         <Method />
       </div>
       </ErrorBoundary>
+        </>
+      )}
     </div>
   );
 }
