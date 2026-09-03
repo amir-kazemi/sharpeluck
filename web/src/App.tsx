@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, SCHEMA_VERSION, type RunStatus } from "./api";
+import { explainTrials } from "./describe";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ProvenanceBar } from "./components/Provenance";
 import { Method } from "./components/Method";
@@ -180,9 +181,14 @@ export default function App() {
         {audit.data && (
           <>
             <p className="note">
-              The strategy below scored best <em>in sample</em> — it is the one you
-              would have picked. Everything after this point is an attempt to knock
-              it down.
+              The search covered{" "}
+              <strong>{trials.data ? explainTrials(trials.data) : "…"}</strong> —
+              every signal is run alongside its own negation, because trying one,
+              finding it backwards, and reporting the flipped version is a free
+              doubling of the search. All of it is editable in the form at the
+              bottom of this page. The strategy below scored best <em>in
+              sample</em>, so it is the one you would have picked; everything
+              after this point is an attempt to knock it down.
             </p>
             <Figure title="Verdict" chart={<Verdict audit={audit.data} />}
                     table={<AuditTable audit={audit.data} />} />
@@ -245,7 +251,7 @@ export default function App() {
         {trials.data && audit.data && (
           <Figure
             title="Trials"
-            sub={`All ${trials.data.length} trials against the Sharpe the best of this search would reach on data with no edge`}
+            sub={`${explainTrials(trials.data)} — against the Sharpe the best of this search would reach on data with no edge`}
             chart={<TrialSpread trials={trials.data} audit={audit.data} />}
             table={<TrialTable trials={trials.data} winner={audit.data.winner.trial} />}
           />

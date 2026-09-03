@@ -32,7 +32,8 @@ export function Verdict({ audit }: { audit: Audit }) {
           <h3>Verdict</h3>
           <div className="sub">
             {describe(winner.expr) ?? "In-sample winner"} — rebalanced every{" "}
-            {winner.rebalance_every_h}h, dollar-neutral, {d.n_trials} trials searched
+            {winner.rebalance_every_h}h, dollar-neutral. Best of {d.n_trials}{" "}
+            trials searched.
           </div>
           <div className="sub" style={{ marginTop: 2 }}>
             <code>{winner.expr}</code>

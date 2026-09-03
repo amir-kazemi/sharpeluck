@@ -29,3 +29,20 @@ export function describe(expr: string): string | null {
     ? `Long the lowest ${phrase}, short the highest`
     : `Long the highest ${phrase}, short the lowest`;
 }
+
+/** Where a trial count comes from, derived from the trials themselves so it is
+ *  shown wherever the count is, not only in the form that produced it. */
+export function explainTrials(
+  trials: { expr: string; rebalance_every_h: number }[],
+): string {
+  const base = (e: string) => (e.startsWith("neg(") ? e.slice(4, -1) : e);
+  const expressions = new Set(trials.map((t) => base(t.expr))).size;
+  const signs = new Set(trials.map((t) => (t.expr.startsWith("neg(") ? "-" : "+"))).size;
+  const rebalances = new Set(trials.map((t) => t.rebalance_every_h)).size;
+  const parts = [
+    `${expressions} signal${expressions === 1 ? "" : "s"}`,
+    `${signs} sign${signs === 1 ? "" : "s"}`,
+    `${rebalances} rebalance frequenc${rebalances === 1 ? "y" : "ies"}`,
+  ];
+  return `${parts.join(" × ")} = ${trials.length} trials`;
+}
