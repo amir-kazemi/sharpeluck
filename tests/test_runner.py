@@ -27,6 +27,21 @@ def test_spec_expands_signs_and_params_into_a_counted_budget():
     assert sum("neg(" in x.expr for x in t) == 2
 
 
+def test_the_universe_is_part_of_the_experiment(store):
+    """Breadth is a research decision, so it belongs in the spec and in the
+    recorded provenance -- an edge that exists only in the top 4 names by
+    dollar volume is a different claim from one across the whole cross-section."""
+    from alpha_audit.runner.spec import UniverseSpec
+
+    panel = prepared(hours=24 * 60)
+    narrow = RunSpec(grids=["cs_zscore(ts_ret(close, [24]))"], rebalances=[24],
+                     universe=UniverseSpec(max_symbols=2, min_adv_usd=1.0))
+    st = create(narrow, store, panel=panel)
+    prov = store.get_json(f"{st.run_id}/status.json")["provenance"]
+    assert prov["mean_universe_size"] > 0
+    assert store.get_json(f"{st.run_id}/spec.json")["universe"]["max_symbols"] == 2
+
+
 def test_spec_rejects_an_unparseable_grid():
     with pytest.raises(ValueError):
         RunSpec(grids=["cs_zscore(nope(close, 1))"])
@@ -92,6 +107,11 @@ def test_result_shapes_match_what_the_frontend_reads(store):
     assert isinstance(report["survives"], bool)
     # The UI gates on this; an unversioned artefact would render as a crash.
     assert report["schema_version"] == SCHEMA_VERSION
+    # An audit without provenance is an audit of nothing in particular.
+    prov = report["provenance"]
+    assert prov["n_symbols_traded"] > 0 and prov["n_bars"] > 0
+    assert prov["start"] < prov["end"]
+    assert report["universe"]["max_symbols"] == spec.universe.max_symbols
     assert store.get_json(f"{st.run_id}/status.json")["schema_version"] == SCHEMA_VERSION
     assert {"cost_bps", "sharpe"} <= set(report["cost_curve"]["points"][0])
 

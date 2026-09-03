@@ -9,6 +9,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field, field_validator
 
 from ..research import dsl
+from ..research.universe import UniverseRules
 
 
 class TrialSpec(BaseModel):
@@ -16,6 +17,42 @@ class TrialSpec(BaseModel):
     expr: str
     rebalance_every_h: int
     cost_bps: float
+
+
+class UniverseSpec(BaseModel):
+    """How the tradable set is defined. This is a research decision, not a
+    constant: an edge that only exists in the top 50 names by dollar volume,
+    or only survives a lax liquidity floor, is a different claim from one that
+    holds across the whole liquid cross-section."""
+
+    max_symbols: int = Field(default=50, ge=2, le=500)
+    min_adv_usd: float = Field(default=1e5, ge=0)
+    min_history_h: int = Field(default=24 * 30, ge=24)
+    min_coverage: float = Field(default=0.90, ge=0.0, le=1.0)
+    rebalance_every_h: int = Field(default=24, ge=1, le=168)
+
+    def to_rules(self) -> UniverseRules:
+        return UniverseRules(
+            max_symbols=self.max_symbols,
+            min_adv_usd=self.min_adv_usd,
+            min_history_h=self.min_history_h,
+            min_coverage=self.min_coverage,
+            rebalance_every_h=self.rebalance_every_h,
+        )
+
+
+class Provenance(BaseModel):
+    """What the numbers are actually about. Stored with every run because an
+    audit of a strategy is meaningless without the data it traded."""
+
+    bar: str = "1h"
+    start: str | None = None
+    end: str | None = None
+    n_bars: int = 0
+    n_symbols_available: int = 0
+    n_symbols_traded: int = 0
+    mean_universe_size: float = 0.0
+    n_rebalances: int = 0
 
 
 class RunSpec(BaseModel):
@@ -33,6 +70,7 @@ class RunSpec(BaseModel):
     n_blocks: int = 10         # CSCV blocks -> C(n, n/2) splits
     n_boot: int = 2000
     mean_block_h: float = 48.0
+    universe: UniverseSpec = Field(default_factory=UniverseSpec)
     label: str | None = None
 
     @field_validator("grids")
@@ -75,6 +113,7 @@ class RunStatus(BaseModel):
     # generation it is looking at rather than discovering it via a TypeError.
     schema_version: int = 0
     run_id: str
+    provenance: Provenance | None = None
     state: str                 # queued | running | done | failed
     n_trials: int
     n_done: int = 0

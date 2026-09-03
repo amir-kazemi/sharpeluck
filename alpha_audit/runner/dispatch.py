@@ -23,14 +23,16 @@ from ..ingest.silver import load_panel
 from ..research.audit import cost_curve, deflate, pbo, search_null
 from ..research.backtest import HOURS_PER_YEAR
 from ..research.signals import prepare_panel
-from .spec import RunSpec, RunStatus
+from ..research.universe import build_universe
+from .spec import Provenance, RunSpec, RunStatus
 from .store import LocalStore, ResultStore
 from .worker import run_one
 
 # Bump when the shape of a run's stored artefacts changes. 1: initial.
 # 2: audit.json gained search_null (replacing reality_check). 3: pbo_cloud gained
-# annualised columns.
-SCHEMA_VERSION = 3
+# annualised columns. 4: the universe became a run parameter and runs carry
+# provenance.
+SCHEMA_VERSION = 4
 
 MAX_WORKERS = int(os.environ.get("ALPHA_AUDIT_WORKERS", "6"))
 
@@ -57,16 +59,37 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _provenance(panel: pl.DataFrame, rules) -> Provenance:
+    live = panel.filter(pl.col("in_universe"))
+    per_bar = live.group_by("ts").len()
+    return Provenance(
+        bar="1h",
+        start=str(panel["ts"].min()),
+        end=str(panel["ts"].max()),
+        n_bars=panel["ts"].n_unique(),
+        n_symbols_available=panel["symbol"].n_unique(),
+        n_symbols_traded=live["symbol"].n_unique(),
+        mean_universe_size=float(per_bar["len"].mean() or 0.0),
+        n_rebalances=live.select(
+            pl.col("ts").dt.truncate(f"{rules.rebalance_every_h}h")).n_unique(),
+    )
+
+
 def create(spec: RunSpec, store: ResultStore, panel: pl.DataFrame | None = None) -> RunStatus:
     run_id = f"{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{secrets.token_hex(2)}"
     trials = spec.trials()
+    rules = spec.universe.to_rules()
     if panel is None:
-        panel = prepare_panel(load_panel(), pl.read_parquet(GOLD / "universe.parquet"))
+        # The universe is rebuilt per run from silver rather than read from a
+        # pre-baked file, because it is now part of the experiment.
+        bars = load_panel()
+        panel = prepare_panel(bars, build_universe(bars, rules), rules)
+    prov = _provenance(panel, rules)
     store.put_table(f"{run_id}/panel.parquet", panel)
     store.put_json(f"{run_id}/spec.json", spec.model_dump())
     st = RunStatus(run_id=run_id, state="queued", n_trials=len(trials),
                    label=spec.label, created_at=_now(),
-                   schema_version=SCHEMA_VERSION)
+                   schema_version=SCHEMA_VERSION, provenance=prov)
     store.put_json(f"{run_id}/status.json", st.model_dump())
     return st
 
@@ -156,6 +179,9 @@ def finalise(run_id: str, store: ResultStore) -> dict:
     report = {
         "schema_version": SCHEMA_VERSION,
         "run_id": run_id,
+        "provenance": _status(store, run_id).provenance.model_dump()
+        if _status(store, run_id).provenance else None,
+        "universe": spec.universe.model_dump(),
         "winner": winner,
         "deflation": d.as_dict(),
         "pbo": pb.as_dict(),

@@ -1,11 +1,14 @@
 import type { Audit } from "../api";
+import { describe } from "../describe";
 
-function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
+function Tile({ label, value, note, help }:
+  { label: string; value: string; note?: string; help?: string }) {
   return (
     <div className="card" style={{ padding: "12px 14px" }}>
       <div className="tile-label">{label}</div>
       <div className="tile-value">{value}</div>
       {note && <div className="sub" style={{ marginTop: 2 }}>{note}</div>}
+      {help && <div className="help">{help}</div>}
     </div>
   );
 }
@@ -28,8 +31,11 @@ export function Verdict({ audit }: { audit: Audit }) {
         <div>
           <h3>Verdict</h3>
           <div className="sub">
-            In-sample winner of {d.n_trials} trials: <code>{winner.expr}</code> rebalanced every{" "}
-            {winner.rebalance_every_h}h
+            {describe(winner.expr) ?? "In-sample winner"} — rebalanced every{" "}
+            {winner.rebalance_every_h}h, dollar-neutral, {d.n_trials} trials searched
+          </div>
+          <div className="sub" style={{ marginTop: 2 }}>
+            <code>{winner.expr}</code>
           </div>
         </div>
         <span className="pill" style={{ borderColor: color, color }}>
@@ -57,17 +63,23 @@ export function Verdict({ audit }: { audit: Audit }) {
 
       <div className="tiles" style={{ marginTop: 18 }}>
         <Tile label="Net Sharpe" value={d.sr_ann.toFixed(2)}
-              note={`gross ${(winner.gross_sharpe ?? 0).toFixed(2)}`} />
-        <Tile label="E[best] under the null" value={sn.sr0_ann.toFixed(2)}
-              note={`${d.sr0_ann.toFixed(2)} if independent`} />
+              note={`gross ${(winner.gross_sharpe ?? 0).toFixed(2)}`}
+              help="Return per unit of risk, annualised, after costs. Around 1 is respectable; the catch is that a big enough search produces big numbers from nothing." />
+        <Tile label="Best the noise would give" value={sn.sr0_ann.toFixed(2)}
+              note={`${d.sr0_ann.toFixed(2)} if the trials were independent`}
+              help="Run this same search on data with no edge in it and the winner would still score about this. The observed Sharpe has to beat it to mean anything." />
         <Tile label="Effective trials" value={`${sn.n_eff.toFixed(1)} / ${d.n_trials}`}
-              note={`mean |corr| ${sn.mean_abs_corr.toFixed(2)}`} />
-        <Tile label="PBO" value={pb.pbo.toFixed(2)}
-              note={`P(OOS loss) ${pb.prob_oos_loss.toFixed(2)}`} />
+              note={`average correlation ${sn.mean_abs_corr.toFixed(2)}`}
+              help="The trials overlap heavily — nested windows, and every signal run beside its own negation — so they amount to fewer genuinely independent looks than the raw count." />
+        <Tile label="Overfitting probability" value={pb.pbo.toFixed(2)}
+              note={`loses money out of sample ${(pb.prob_oos_loss * 100).toFixed(0)}% of splits`}
+              help="Split the history in half many times over: how often does the winner of one half fall below average in the other? 0.5 means picking it was a coin flip." />
         <Tile label="Reality check p" value={sn.rc_p_value.toFixed(3)}
-              note={`${sn.n_boot} bootstrap paths`} />
+              note={`${sn.n_boot} resampled histories`}
+              help="The chance of seeing a winner this good if none of the trials had any edge. Below 0.05 is the usual bar." />
         <Tile label="Break-even cost" value={`${cc.break_even_bps?.toFixed(1) ?? "—"} bps`}
-              note={`turnover ${cc.mean_turnover.toFixed(3)}/bar`} />
+              note={`vs ${winner.cost_bps} bps charged here`}
+              help="The trading cost at which the edge disappears entirely. The further above what you actually pay, the more room for error." />
       </div>
     </section>
   );

@@ -19,13 +19,24 @@ export function SubmitPanel({ onSubmitted }: { onSubmitted: (id: string) => void
   const [cost, setCost] = useState(5);
   const [label, setLabel] = useState("");
   const [token, setToken] = useState("");
+  // The universe is a research decision, not a constant: whether an edge
+  // survives at 200 names as well as 50 is exactly the kind of question this
+  // platform exists to ask.
+  const [maxSymbols, setMaxSymbols] = useState(50);
+  const [minAdv, setMinAdv] = useState(100_000);
+  const [minHistoryDays, setMinHistoryDays] = useState(30);
 
   const spec: RunSpecInput = useMemo(() => ({
     grids: text.split("\n").map((s) => s.trim()).filter(Boolean),
     rebalances,
     cost_bps: cost,
+    universe: {
+      max_symbols: maxSymbols,
+      min_adv_usd: minAdv,
+      min_history_h: minHistoryDays * 24,
+    },
     label: label || null,
-  }), [text, rebalances, cost, label]);
+  }), [text, rebalances, cost, label, maxSymbols, minAdv, minHistoryDays]);
 
   const ops = useQuery({ queryKey: ["ops"], queryFn: api.ops, staleTime: Infinity });
   const preview = useQuery({
@@ -84,6 +95,28 @@ export function SubmitPanel({ onSubmitted }: { onSubmitted: (id: string) => void
         </label>
       </div>
 
+      <div className="row" style={{ marginTop: 10, gap: 18 }}>
+        <span className="sub" style={{ minWidth: 62 }}>Universe</span>
+        <label className="row" style={{ gap: 6 }}>
+          <span className="sub">top N by volume</span>
+          <input type="number" min={2} max={500} step={10} value={maxSymbols}
+                 style={{ width: 74 }}
+                 onChange={(e) => setMaxSymbols(Number(e.target.value))} />
+        </label>
+        <label className="row" style={{ gap: 6 }}>
+          <span className="sub">min $/hour</span>
+          <input type="number" min={0} step={25000} value={minAdv}
+                 style={{ width: 104 }}
+                 onChange={(e) => setMinAdv(Number(e.target.value))} />
+        </label>
+        <label className="row" style={{ gap: 6 }}>
+          <span className="sub">min history (days)</span>
+          <input type="number" min={1} max={365} step={5} value={minHistoryDays}
+                 style={{ width: 74 }}
+                 onChange={(e) => setMinHistoryDays(Number(e.target.value))} />
+        </label>
+      </div>
+
       <div className="row" style={{ marginTop: 14, gap: 14 }}>
         <button onClick={() => submit.mutate()}
                 disabled={submit.isPending || !preview.data}
@@ -92,7 +125,8 @@ export function SubmitPanel({ onSubmitted }: { onSubmitted: (id: string) => void
         </button>
         <span className="sub">
           {preview.data
-            ? `${preview.data.n_trials} trials (each signal is run alongside its negation)`
+            ? `${preview.data.n_trials} trials (each signal is run alongside its negation) · `
+              + `universe rebuilt for this run`
             : preview.isFetching ? "counting trials…" : "—"}
         </span>
       </div>

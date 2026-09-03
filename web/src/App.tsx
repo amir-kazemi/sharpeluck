@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, SCHEMA_VERSION, type RunStatus } from "./api";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ProvenanceBar } from "./components/Provenance";
 import { Figure } from "./components/Figure";
 import { SubmitPanel } from "./components/SubmitPanel";
 import { TrialTable } from "./components/TrialTable";
@@ -114,9 +115,38 @@ export default function App() {
       <ErrorBoundary resetKey={id ?? ""}>
       <div className={busy ? "stale" : undefined}
            style={{ display: "grid", gap: 16 }}>
+        <p className="note">
+          A <strong>trial</strong> is one trading rule: score every coin in the
+          universe each day, buy the high scorers, short the low ones, hold until
+          the next rebalance. A <strong>run</strong> searches many trials at once
+          and then asks the question that matters — <strong>how much of the best
+          one&rsquo;s performance is real, and how much is just the reward for
+          having looked so many times?</strong>
+        </p>
+
+        {run?.provenance && (
+          <ProvenanceBar p={run.provenance} u={audit.data?.universe} />
+        )}
         {audit.data && (
-          <Figure title="Verdict" chart={<Verdict audit={audit.data} />}
-                  table={<AuditTable audit={audit.data} />} />
+          <>
+            <p className="note">
+              The strategy below scored best <em>in sample</em> — it is the one you
+              would have picked. Everything after this point is an attempt to knock
+              it down.
+            </p>
+            <Figure title="Verdict" chart={<Verdict audit={audit.data} />}
+                    table={<AuditTable audit={audit.data} />} />
+          </>
+        )}
+
+        {audit.data && (
+          <p className="note">
+            Two independent ways of attacking it. On the left: split the history in
+            half many times over, pick the winner in one half, and see where it
+            lands in the other — a good rule should keep winning. On the right: the
+            edge is worth nothing if trading costs eat it, so the Sharpe is
+            recomputed at rising costs until it dies.
+          </p>
         )}
 
         <div className="grid2">
@@ -139,9 +169,27 @@ export default function App() {
         </div>
 
         {equity.data && (
+          <p className="note">
+            What holding this strategy would actually have done: 1.0 is your
+            starting money, and the two lines are before and after trading costs.
+            The gap between them is what the broker takes.
+          </p>
+        )}
+
+        {equity.data && (
           <Figure title="Equity curve" sub="The winner, gross and net of cost"
                   chart={<EquityCurve points={equity.data} />}
                   table={<EquityTable points={equity.data} />} />
+        )}
+
+        {trials.data && audit.data && (
+          <p className="note">
+            Every trial the search ran, best to worst, with the horizontal line
+            marking what the best of a search this size scores on data containing
+            no edge whatsoever. Dots below that line are not evidence of anything —
+            and when the whole cloud sits below it, the winner was manufactured by
+            the search rather than found by it.
+          </p>
         )}
 
         {trials.data && audit.data && (
@@ -153,6 +201,12 @@ export default function App() {
           />
         )}
 
+        <p className="note">
+          Now try your own. Change the signal, the rebalance frequency, the cost
+          assumption, or how wide the universe is — every one of those is a
+          research decision, and the point of this page is that they all change the
+          answer.
+        </p>
         <SubmitPanel onSubmitted={setSelected} />
       </div>
       </ErrorBoundary>

@@ -2,10 +2,30 @@ const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
 /** Bumped by the runner whenever stored artefacts change shape; runs written
  *  before versioning report 0. Must match SCHEMA_VERSION in dispatch.py. */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
+
+export type Provenance = {
+  bar: string;
+  start: string | null;
+  end: string | null;
+  n_bars: number;
+  n_symbols_available: number;
+  n_symbols_traded: number;
+  mean_universe_size: number;
+  n_rebalances: number;
+};
+
+export type UniverseSpec = {
+  max_symbols: number;
+  min_adv_usd: number;
+  min_history_h: number;
+  min_coverage: number;
+  rebalance_every_h: number;
+};
 
 export type RunStatus = {
   schema_version?: number;
+  provenance?: Provenance | null;
   run_id: string;
   state: "queued" | "running" | "done" | "failed";
   n_trials: number;
@@ -36,6 +56,8 @@ export type Trial = {
 
 export type Audit = {
   schema_version?: number;
+  provenance?: Provenance | null;
+  universe?: UniverseSpec;
   run_id: string;
   winner: Trial;
   deflation: {
@@ -93,6 +115,7 @@ export type RunSpecInput = {
   grids: string[];
   rebalances: number[];
   cost_bps: number;
+  universe?: Partial<UniverseSpec>;
   label?: string | null;
 };
 

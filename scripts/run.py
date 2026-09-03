@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from alpha_audit.runner.dispatch import create, execute
-from alpha_audit.runner.spec import RunSpec
+from alpha_audit.runner.spec import RunSpec, UniverseSpec
 from alpha_audit.runner.store import LocalStore
 
 DEFAULT_GRIDS = [
@@ -31,13 +31,24 @@ def main() -> int:
     ap.add_argument("--rebalances", nargs="+", type=int, default=[6, 24])
     ap.add_argument("--cost-bps", type=float, default=5.0)
     ap.add_argument("--label", default=None)
+    ap.add_argument("--max-symbols", type=int, default=50)
+    ap.add_argument("--min-adv-usd", type=float, default=1e5)
+    ap.add_argument("--min-history-days", type=int, default=30)
     a = ap.parse_args()
 
     store = LocalStore()
-    spec = RunSpec(grids=a.grids, rebalances=a.rebalances,
-                   cost_bps=a.cost_bps, label=a.label)
+    spec = RunSpec(
+        grids=a.grids, rebalances=a.rebalances, cost_bps=a.cost_bps, label=a.label,
+        universe=UniverseSpec(max_symbols=a.max_symbols, min_adv_usd=a.min_adv_usd,
+                              min_history_h=a.min_history_days * 24),
+    )
     st = create(spec, store)
     print(f"run {st.run_id}: {st.n_trials} trials")
+    if st.provenance:
+        pv = st.provenance
+        print(f"  data   {pv.start[:10]} -> {pv.end[:10]}  {pv.n_bars:,} bars  "
+              f"{pv.n_symbols_traded}/{pv.n_symbols_available} pairs traded  "
+              f"~{pv.mean_universe_size:.0f} held per bar")
     done = execute(st.run_id, store)
     if done.state != "done":
         print(done.error, file=sys.stderr)
