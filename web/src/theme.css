@@ -133,6 +133,10 @@ tbody tr:hover { background: var(--wash); }
 .scroll { overflow-x: auto; max-height: 380px; overflow-y: auto; }
 code { font-size: 13.5px; color: var(--text-secondary); }
 
+a.pill { color: var(--text-secondary); }
+a.pill:hover { border-color: var(--series-1); color: var(--series-1); }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 .pill {
   display: inline-flex; align-items: center; gap: 6px;
   border: 1px solid var(--border); border-radius: 999px;

@@ -98,7 +98,12 @@ export default function App() {
           <h1 style={{ fontSize: 21 }}>alpha-audit</h1>
           <div className="sub">How much of your Sharpe is selection bias?</div>
         </div>
-        <ThemeToggle />
+        <div className="row" style={{ gap: 10 }}>
+          <a href="#new-run" className="pill" style={{ textDecoration: "none" }}>
+            configure a run ↓
+          </a>
+          <ThemeToggle />
+        </div>
       </header>
 
       {/* One filter row, above everything it scopes. */}
@@ -185,8 +190,9 @@ export default function App() {
               <strong>{trials.data ? explainTrials(trials.data) : "…"}</strong> —
               every signal is run alongside its own negation, because trying one,
               finding it backwards, and reporting the flipped version is a free
-              doubling of the search. All of it is editable in the form at the
-              bottom of this page. The strategy below scored best <em>in
+              doubling of the search. Every part of that is editable in{" "}
+              <a href="#new-run">the form at the bottom of this page</a>. The
+              strategy below scored best <em>in
               sample</em>, so it is the one you would have picked; everything
               after this point is an attempt to knock it down.
             </p>
@@ -257,11 +263,11 @@ export default function App() {
           />
         )}
 
-        <p className="note">
-          Now try your own. Change the signal, the rebalance frequency, the cost
-          assumption, or how wide the universe is — every one of those is a
-          research decision, and the point of this page is that they all change the
-          answer.
+        <p className="note" id="new-run" style={{ scrollMarginTop: 16 }}>
+          Now try your own. Change the signal, whether each one is also tested
+          negated, the rebalance frequency, the cost assumption, or how wide the
+          universe is — every one of those is a research decision, and the point
+          of this page is that they all change the answer.
         </p>
         <SubmitPanel onSubmitted={setSelected} token={token} />
         <Method />
