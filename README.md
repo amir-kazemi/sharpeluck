@@ -125,124 +125,42 @@ expected best of two *independent* trials. Two anti-correlated trials are worth
 roughly 2.8 independent looks, not 1 — which is why the two estimates differ by
 so much here, and why the honest one is the one derived from the actual maximum.
 
-## The result — the winner does not survive
+## The result — 723 symbols, 4.6 years, 44 trials
 
-The in-sample winner, 72h cross-sectional reversal at daily rebalance:
+Bronze holds 21,175 monthly archives (24.9 GB, ~915M one-minute bars) covering
+every USDT pair the archive has ever listed from 2022-01 to 2026-07. The hourly
+panel is 15.3M bars over 678 symbols; **410 distinct symbols pass through a
+top-50 universe**, so the cross-section turns over eight times across the sample.
 
-    net Sharpe                 +0.55
-    E[best] as measured        +1.80
-    DSR (measured null)         0.125      P(edge is real) ~ 13%
-    effective trials            20.5 of 44
-    PBO                         0.270
-    P(OOS loss)                 0.675
-    Reality Check p             0.950
-    break-even cost            10.4 bps    vs 5 bps assumed
+The in-sample winner is a **low-volatility factor** — long the calmest names in
+the universe, short the most volatile, measured over 72 hours and rebalanced
+daily:
 
-Verdict: **does not survive**. Correcting the independence assumption raises the
-DSR five-fold and changes nothing — 0.125 is not an edge. Gross Sharpe is 1.06
-and half of it is eaten by 5 bps of cost. This is the intended outcome of the
-exercise: a platform that only ever confirms signals is not an audit.
+    net Sharpe                 +1.32     gross +1.39
+    E[best] under the null     +0.81     (+2.20 if the 44 trials were independent)
+    Deflated Sharpe             0.830
+    PBO                         0.024     P(OOS loss) 0.067
+    Reality check p             0.029
+    effective trials            18.5 of 44
+    break-even cost           102.1 bps   against 5 bps charged
 
-## The runner seam
+**Three of the four lenses pass. The deflated Sharpe does not: 0.83 is not 0.95.**
+So the verdict is still *does not survive*, but for a much more interesting
+reason than the 10-month sample, where the winner was noise outright.
 
-A run is a spec, and a spec is the whole experiment: grids, sign templates,
-rebalances, cost, fold and block counts. Trial expansion is deterministic, so
-the trial budget the deflation needs is recorded rather than remembered.
+Two things make this more than a lucky corner of the grid. The whole low-vol
+family clusters at the top — every `ts_std` variant, at both rebalance
+frequencies, scores in-sample 0.91–1.15 and out-of-sample 1.29–1.51 — and the
+edge is not a disguised market bet: regressed on the equal-weighted market its
+**beta is +0.000** and the market-neutralised Sharpe is unchanged at 1.32.
 
-One worker does one trial. It takes a run id and a trial index, reads the
-prepared panel and spec from the store, and writes a summary and a per-bar
-return series back. It holds no state and talks to nothing but the store:
-
-    alpha_audit/runner/store.py      keys like runs/<id>/trials/7.json
-    alpha_audit/runner/worker.py     ALPHA_AUDIT_RUN_ID + ALPHA_AUDIT_TRIAL
-    alpha_audit/runner/dispatch.py   create / execute / finalise
-
-That is the only thing the Azure port has to preserve. `LocalStore` becomes a
-blob adapter over the same keys; the dispatcher's pool becomes a queue and a
-Container Apps Job; the worker does not change.
-
-Locally the dispatcher defaults to **threads**, switchable with
-`ALPHA_AUDIT_EXECUTOR=process`. This development host is an HPC login node whose
-cgroup caps the user at 500 tasks, and every spawned Polars runtime starts a
-batch of threads of its own, so a six-process pool fails at import with EAGAIN.
-Threads share one Polars runtime and Polars releases the GIL for this work, so
-the fan-out is real. The honest way to use many cores here is Slurm, not a
-login-node pool — in Azure the question does not arise, because each worker is
-its own container.
-
-## The API
-
-    GET  /healthz
-    GET  /ops                    the signal language, for the expression builder
-    POST /runs/preview           expand a spec and count the trials, without spending them
-    POST /runs                   record the spec, launch the dispatcher, 202 + run id
-    GET  /runs                   all runs, newest first
-    GET  /runs/{id}              status + spec
-    GET  /runs/{id}/trials       the trial table
-    GET  /runs/{id}/audit        deflation, PBO, reality check, cost curve
-    GET  /runs/{id}/cloud        IS vs OOS Sharpe per CSCV split -- the trial cloud
-    GET  /runs/{id}/equity       the winner's net and gross equity curves
-
-Never computes a run in-process: a POST records the spec and launches the
-dispatcher separately. Reading results is open; submitting a run costs compute
-and needs `ALPHA_AUDIT_TOKEN`. That single check is the entire authorisation
-model, deliberately — see *deliberate omissions*.
-
-## The frontend
-
-React 19 + TypeScript + Vite, TanStack Query for all server state (there is no
-global store because there is no client state worth one), deployed as a static
-bundle. 80 kB gzipped.
-
-**No chart library.** The three charts are hand-written SVG. 2px lines, >=8px
-markers each carrying a 2px ring in the surface colour, solid hairline grids,
-nearest-point hit testing with a 26px radius rather than a pinpoint dot, and a
-downsampled equity series — all of which is less code to write directly than to
-extract from a library's defaults, and it keeps the dependency tree at 42
-packages.
-
-| View | Form | Why that form |
-|---|---|---|
-| Verdict | one hero figure + stat tiles | The story is a single number — the probability the edge is real. A chart of it would be a one-bar bar chart. |
-| Trial cloud | scatter, single series | 252 CSCV splits: where the in-sample winner landed out of sample. The region below zero is shaded in neutral ink and labelled with PBO. |
-| Cost sensitivity | line, single series | Sharpe against assumed cost, with reference rules at zero and at break-even, and one direct label on the cost actually charged. |
-| Equity curve | line, two series | Gross vs net. Two series means a legend is always present; end labels appear only when the lines separate enough not to detach from them. |
-
-Palette is the validated default set: categorical slots 1 and 2 (blue, orange),
-run through the validator in both modes — all six checks pass (worst adjacent
-CVD ΔE 24.7 light / 26.8 dark against a ΔE 8 target). Dark mode is a selected
-set of steps for the dark surface, not an inversion, and an explicit theme
-choice beats the OS setting in both directions.
-
-Accessibility is structural rather than bolted on: **every chart has a table
-twin** behind a Chart/Table toggle, so no value is reachable only by hover; the
-verdict's status colour always arrives with a glyph and a word; and the trial
-table is itself the run's table view. `test_result_shapes_match_what_the_frontend_reads`
-pins the field names the charts consume — a renamed key in the runner would
-otherwise plot as an empty panel rather than raise.
-
-## Environment
-
-    conda create -p ./env python=3.12 -y                     # pinned interpreter
-    conda install -p ./env -c conda-forge nodejs=22 -y        # Node LTS, same env
-    ./env/bin/python -m venv ./.venv                          # Python deps, isolated
-    ./.venv/bin/pip install -r requirements.lock.txt
-    cd web && npm install
-
-Then `. scripts/env.sh` puts both on PATH for the session.
-
-Two layers, for two different reasons. The conda env is only there to pin an
-interpreter that does not belong to another project — the system python is 3.9,
-too old for this code. The venv on top is what actually isolates: **a venv
-disables user-site, a conda env does not.** On a shared machine with anything in
-`~/.local/lib/python3.12/site-packages`, that directory sits *ahead* of a conda
-env's own site-packages on `sys.path` and silently shadows pinned versions. The
-venv is the layer that stops it.
-
-Node lives in the conda layer because the venv layer has no notion of it. All of
-it sits outside the repo, on scratch, alongside the lake and `node_modules` —
-home here has an inode quota, and none of the three is worth spending it on.
-`requirements.txt` is the readable set; `requirements.lock.txt` is the pinned one.
+And two reasons to keep it in the "candidate" column. Low volatility is a
+*documented* factor, so rediscovering it is evidence the platform works, not
+evidence of a new find. And the backtest assumes the short leg is free to
+borrow: shorting the most volatile alt-coins on spot is often impossible, and on
+perpetuals it carries a funding cost this model does not charge. The 102 bps of
+break-even headroom is real, but it is headroom against *spread*, not against
+borrow.
 
 ## Does the platform work? — the null-data self-test
 
