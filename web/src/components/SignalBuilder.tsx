@@ -18,12 +18,24 @@ export const MEASURES = {
   trades: { label: "trade count", inner: "ts_mean(trades, W)" },
 } as const;
 
+/** What the measurement is, then what buying the top of it actually means --
+ *  which is the part a reader needs and the part the old one-liners skipped. */
 const HINT: Record<keyof typeof MEASURES, string> = {
-  price: "return over the window — momentum as written, reversal negated",
-  vol: "standard deviation of hourly returns — the low-volatility factor, negated",
-  buy: "share of volume hitting the ask, averaged — order-flow imbalance",
-  volume: "average dollar volume — a liquidity or size tilt",
-  trades: "average number of trades — activity rather than size",
+  price:
+    "How much the coin rose or fell over the window. Buys recent winners; " +
+    "negated, it buys recent losers instead.",
+  vol:
+    "How much the coin's hourly returns swung about. Buys the wildest coins; " +
+    "negated, it buys the calmest.",
+  buy:
+    "What share of trading was aggressive buying rather than selling. Buys " +
+    "the coins buyers have been chasing.",
+  volume:
+    "How much money changed hands. Buys the largest, most liquid coins; " +
+    "negated, the smallest.",
+  trades:
+    "How many separate trades happened, regardless of size. Buys the most " +
+    "actively traded coins — many small trades rather than a few large ones.",
 };
 
 export const WINDOWS = [
@@ -84,9 +96,11 @@ export function SignalBuilder(
               </button>
             ))}
             <button onClick={() => set(i, { cs: r.cs === "zscore" ? "rank" : "zscore" })}
-                    title="z-score weights by how extreme a coin is; rank treats the ordering only"
+                    title={r.cs === "zscore"
+                      ? "z-score: position size grows with how extreme a coin is, so an outlier can dominate. Click for rank."
+                      : "rank: only the ordering matters, so the most extreme coin gets no more weight than the next. Click for z-score."}
                     style={{ padding: "3px 8px", fontSize: 12 }}>
-              {r.cs === "zscore" ? "z-score" : "rank"}
+              {r.cs === "zscore" ? "by size" : "by order"}
             </button>
             {rows.length > 1 && (
               <button onClick={() => onChange(rows.filter((_, j) => j !== i))}
@@ -99,8 +113,8 @@ export function SignalBuilder(
           <div className="help">
             {HINT[r.measure]}
             {r.windows.length === 0
-              ? " · pick at least one window"
-              : <> · <code>{rowToExpr(r)}</code></>}
+              ? " Pick at least one window."
+              : <div style={{ marginTop: 3 }}><code>{rowToExpr(r)}</code></div>}
           </div>
         </div>
       ))}

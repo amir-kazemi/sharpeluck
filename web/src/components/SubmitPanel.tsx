@@ -75,9 +75,12 @@ export function SubmitPanel(
         <div>
           <h3>New run</h3>
           <div className="sub">
-            Each signal ranks every coin in the universe, then buys the top and
-            shorts the bottom. Picking more windows widens the search — which is
-            not free: every extra trial raises the Sharpe the winner has to beat.
+            Each signal ranks every coin in the universe, then buys the top of
+            the ranking and shorts the bottom. <em>by size</em> gives bigger
+            positions to more extreme coins; <em>by order</em> ignores how
+            extreme they are, which is the more robust of the two. More windows
+            widens the search — not free, since every extra trial raises the
+            Sharpe the winner has to beat.
           </div>
         </div>
         <div className="row" style={{ gap: 6 }}>
