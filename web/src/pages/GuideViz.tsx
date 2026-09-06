@@ -56,18 +56,29 @@ export function CategoryBars(
  *  than average," not yet "long or short," so it deliberately does not use the
  *  long/short colours below.
  *
- *  Labels are not evenly spread -- coins can cluster in value, as B/C/D do
- *  here -- so a fixed label row collides. Greedily place each label (sorted
- *  left to right) in the lowest tier that does not overlap what is already
- *  there; a label pushed to a higher tier keeps a thin leader down to its dot.
+ *  Coins cluster in value -- B, C and D all sit within half a standard
+ *  deviation here -- so a single label row collides. Labels are placed left to
+ *  right into the lowest tier that clears whatever is already there, and a
+ *  label pushed up keeps a thin leader down to its dot.
+ *
+ *  Geometry grows DOWNWARD from a fixed top: the topmost tier's baseline is
+ *  pinned just below y=0 and the dot row is pushed down to make room, so
+ *  adding a tier can never push a label off the top of the viewBox. Zero is a
+ *  short tick straddling the axis rather than a full-height rule, which would
+ *  otherwise run straight through any label sitting near it.
  */
 const FONT = 11;
-const CHAR_W = FONT * 0.62; // monospace, approx
-const TIER_H = 15;
-const DOT_Y = 30;
+const CHAR_W = FONT * 0.62;   // monospace, approximate
+const ASCENT = FONT * 0.78;
+const DESCENT = FONT * 0.22;
+const TIER_H = 16;
+const TOP_PAD = 3;
+const LABEL_GAP = 12;         // tier-0 baseline to dot centre
+const R = 5;
 
-export function NumberLine({ values }: { values: { coin: string; v: number }[] }) {
-  const w = 460, pad = 34;
+export function numberLineGeometry(
+  values: { coin: string; v: number }[], w = 460, pad = 34,
+) {
   const vs = values.map((x) => x.v);
   const [lo, hi] = padded(Math.min(0, ...vs), Math.max(0, ...vs), 0.3);
   const x = linear(lo, hi, pad, w - pad);
@@ -82,28 +93,43 @@ export function NumberLine({ values }: { values: { coin: string; v: number }[] }
   const lastRight: number[] = [];
   for (const it of items) {
     let tier = 0;
-    while (lastRight[tier] !== undefined && it.px - it.halfW < lastRight[tier] + 3) tier++;
+    while (lastRight[tier] !== undefined && it.px - it.halfW < lastRight[tier] + 4) tier++;
     lastRight[tier] = it.px + it.halfW;
     it.tier = tier;
   }
-  const maxTier = Math.max(0, ...items.map((it) => it.tier));
-  const h = DOT_Y + 10 + maxTier * TIER_H;
 
+  const maxTier = Math.max(0, ...items.map((it) => it.tier));
+  const topBaseline = TOP_PAD + ASCENT;
+  const dotY = topBaseline + maxTier * TIER_H + LABEL_GAP;
+  const zeroX = x(0);
+  const h = dotY + R + 2 + 16;   // dot, then room for the "0" beneath the axis
+  return { items, x, w, pad, dotY, zeroX, h, maxTier, labelY: (tier: number) => dotY - LABEL_GAP - tier * TIER_H };
+}
+
+export function NumberLine({ values }: { values: { coin: string; v: number }[] }) {
+  const g = numberLineGeometry(values);
   return (
-    <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMinYMid meet">
-      <line x1={pad} x2={w - pad} y1={DOT_Y} y2={DOT_Y} stroke="var(--axis)" strokeWidth={1} />
-      <line x1={x(0)} x2={x(0)} y1={6} y2={DOT_Y} stroke="var(--rule)" strokeWidth={1.5} />
-      {items.map((it) => {
-        const labelY = DOT_Y - 10 - it.tier * TIER_H;
+    <svg width="100%" viewBox={`0 0 ${g.w} ${g.h}`} preserveAspectRatio="xMinYMid meet">
+      <line x1={g.pad} x2={g.w - g.pad} y1={g.dotY} y2={g.dotY}
+            stroke="var(--axis)" strokeWidth={1} />
+      <line data-role="zero" x1={g.zeroX} x2={g.zeroX} y1={g.dotY - 7} y2={g.dotY + 7}
+            stroke="var(--rule)" strokeWidth={1.5} />
+      <text x={g.zeroX} y={g.dotY + 18} textAnchor="middle" fontSize={10}
+            fill="var(--muted)">0</text>
+      {g.items.filter((it) => it.tier > 0).map((it) => (
+        <line key={`lead-${it.coin}`} x1={it.px} x2={it.px}
+              y1={g.labelY(it.tier) + DESCENT + 1} y2={g.dotY - R - 2}
+              stroke="var(--grid)" strokeWidth={1} />
+      ))}
+      {g.items.map((it) => {
+        const ly = g.labelY(it.tier);
         return (
           <g key={it.coin}>
-            {it.tier > 0 && (
-              <line x1={it.px} x2={it.px} y1={labelY + 4} y2={DOT_Y - 6}
-                    stroke="var(--grid)" strokeWidth={1} />
-            )}
-            <circle cx={it.px} cy={DOT_Y} r={5} fill="var(--series-1)"
+            <circle cx={it.px} cy={g.dotY} r={R} fill="var(--series-1)"
                     stroke="var(--surface-1)" strokeWidth={2} />
-            <text x={it.px} y={labelY} textAnchor="middle" fontSize={FONT} fill="var(--text-secondary)">
+            <text x={it.px} y={ly} textAnchor="middle" fontSize={FONT}
+                  fill="var(--text-secondary)" stroke="var(--surface-1)"
+                  strokeWidth={3.5} paintOrder="stroke">
               {it.label}
             </text>
           </g>
@@ -112,6 +138,8 @@ export function NumberLine({ values }: { values: { coin: string; v: number }[] }
     </svg>
   );
 }
+
+export const NUMBER_LINE_METRICS = { FONT, CHAR_W, ASCENT, DESCENT, R };
 
 /** The one place sign genuinely means a polarity -- long vs. short -- rather
  *  than an ordering, so this is the one diagram that earns the diverging pair.
