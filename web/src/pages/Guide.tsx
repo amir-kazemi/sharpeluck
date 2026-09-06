@@ -4,7 +4,7 @@ import {
 } from "./toyCalc";
 import {
   BellCurve, CategoryBars, DecliningLine, DivergingBars, NumberLine, PnlBars,
-  MaxDistribution, SearchBreakdown, SearchCostCurve, Sparkline, SplitHalf,
+  SearchBreakdown, SearchCostCurve, Sparkline, SplitHalf,
 } from "./GuideViz";
 import { Tex } from "../components/Tex";
 
@@ -53,7 +53,6 @@ export default function Guide() {
   const z2 = invNorm(p2);
   const bestOf44 = expectedBestOfN(N);
   const exampleSpread = 0.5;   // an illustrative dispersion of trial Sharpes
-  const pExceeds = 1 - Math.pow(normCdf(z1), N);   // how often the max clears z1
 
   const pnlSum = b.days
     .map((d) => `${d.pnl >= 0 ? "+" : "-"}${Math.abs(d.pnl * 100).toFixed(3)}`)
@@ -332,38 +331,33 @@ export default function Guide() {
 
         <p>
           <strong>But 2σ is too low, and here is why.</strong> Run the whole
-          experiment once — {N} useless rules, each scored on noisy data — and
-          you get one winner with one score. Run it again with fresh noise and
-          the winner scores something different. Repeat it thousands of times
-          and those winning scores form a distribution of their own:
+          experiment once — {N} useless rules — and you get one winner with one
+          score. Run it again with fresh noise and the winner scores something
+          different. The winner's score is itself a random quantity, so 2σ is
+          not where it lands; it is a level it usually <em>clears</em>.
         </p>
-        <Figure caption={
-          `The exact density of the best of ${N} scores when none of the rules has any `
-          + `edge. Shaded: the ${(pExceeds * 100).toFixed(0)}% of repeats in which the `
-          + `winner beats the first guess.`
-        }>
-          <MaxDistribution n={N} guess={z1} mean={bestOf44} />
-        </Figure>
-        <p>Two things to read off it:</p>
-        <ul className="guide-list">
-          <li>
-            The winner beats {z1.toFixed(2)}σ about{" "}
-            {(pExceeds * 100).toFixed(0)}% of the time. So {z1.toFixed(0)}σ is
-            not where the winner usually lands — it is a level the winner
-            usually <em>exceeds</em>.
-          </li>
-          <li>
-            The curve trails off slowly to the right. Most winners land somewhere
-            around 2σ, but now and then one reaches 3σ or beyond, and those rare
-            large outcomes drag the average upward.
-          </li>
-        </ul>
         <p>
-          Average across all those repeats and you get{" "}
-          <strong>{bestOf44.toFixed(2)}σ</strong> — the value marked on the
-          chart above. That is the number we want, because the question is what
-          a search of this size <em>typically</em> hands you, not its best case
-          or its worst.
+          How usually? For the winner to fall <em>below</em> 2σ, all {N} draws
+          must fall below it — and each does so with probability 1 − 1/{N}:
+        </p>
+        <Tex tex={String.raw`P(\text{winner} \le ${z1.toFixed(2)}\sigma)
+          = \left(1-\frac{1}{${N}}\right)^{${N}} = ${Math.pow(1 - 1 / N, N).toFixed(2)}
+          \qquad\Longrightarrow\qquad
+          P(\text{winner} > ${z1.toFixed(2)}\sigma) = ${(1 - Math.pow(1 - 1 / N, N)).toFixed(2)}`} />
+        <p>
+          So the winner beats the first guess about{" "}
+          {((1 - Math.pow(1 - 1 / N, N)) * 100).toFixed(0)}% of the time — and
+          that is not a quirk of {N}. Since (1 − 1/N)<sup>N</sup> → 1/e, picking
+          the (1 − 1/N) quantile always leaves the winner beating it roughly{" "}
+          {((1 - 1 / Math.E) * 100).toFixed(0)}% of the time, whatever N is.
+        </p>
+        <p>
+          And the winner occasionally lands far above — 3σ or beyond — which
+          pulls its <em>average</em> higher still, above the level it typically
+          reaches. For {N} draws that average is{" "}
+          <strong>{bestOf44.toFixed(2)}σ</strong>, the value marked on the chart
+          above. That is the number we want: what a search of this size
+          typically hands you, not its best case or its worst.
         </p>
         <p>
           Computing that average directly means blending two quantiles rather

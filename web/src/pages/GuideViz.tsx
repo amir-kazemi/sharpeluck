@@ -1,5 +1,5 @@
 import { linear, padded } from "../charts/primitives";
-import { expectedBestOfN, normCdf } from "./toyCalc";
+import { expectedBestOfN } from "./toyCalc";
 
 /** Small illustrative diagrams for the walkthrough. Unlike the app's data
  *  charts these have no hover layer: every value that matters is already a
@@ -314,63 +314,6 @@ export function SearchCostCurve() {
       <text x={(m.left + w - m.right) / 2} y={h - 6} textAnchor="middle"
             fontSize={10.5} fill="var(--text-secondary)">
         number of trials searched
-      </text>
-    </svg>
-  );
-}
-
-/** The distribution of the winner's score.
- *
- *  Not a schematic and not simulated: the maximum of N standard normals has
- *  density N*Phi(x)^(N-1)*phi(x) exactly, so this is that curve evaluated.
- *  Two markers, deliberately -- the first guess and the average -- because the
- *  gap between them is the entire point of the passage it illustrates.
- */
-export function MaxDistribution(
-  { n, guess, mean }: { n: number; guess: number; mean: number },
-) {
-  const w = 460, h = 176;
-  const m = { top: 30, right: 20, bottom: 34, left: 24 };
-  const lo = 0.5, hi = 4.5;
-  const phi = (x: number) => Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
-  const dens = (x: number) => n * Math.pow(normCdf(x), n - 1) * phi(x);
-
-  const pts = Array.from({ length: 140 }, (_, i) => {
-    const x = lo + (i / 139) * (hi - lo);
-    return { x, y: dens(x) };
-  });
-  const peak = Math.max(...pts.map((p) => p.y));
-  const X = linear(lo, hi, m.left, w - m.right);
-  const Y = linear(0, peak * 1.12, h - m.bottom, m.top);
-  const path = pts.map((p, i) => `${i ? "L" : "M"}${X(p.x)},${Y(p.y)}`).join(" ");
-  const right = pts.filter((p) => p.x >= guess);
-  const shaded = right.length
-    ? `M${X(right[0].x)},${Y(0)} `
-      + right.map((p) => `L${X(p.x)},${Y(p.y)}`).join(" ")
-      + ` L${X(hi)},${Y(0)} Z`
-    : "";
-
-  return (
-    <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMinYMid meet">
-      <path d={shaded} fill="var(--series-1)" opacity={0.16} />
-      <path d={path} fill="none" stroke="var(--series-1)" strokeWidth={2} />
-      <line x1={m.left} x2={w - m.right} y1={Y(0)} y2={Y(0)}
-            stroke="var(--axis)" strokeWidth={1} />
-      {[1, 2, 3, 4].map((t) => (
-        <text key={t} x={X(t)} y={Y(0) + 15} textAnchor="middle" fontSize={10}
-              fill="var(--muted)">{t}σ</text>
-      ))}
-      <line x1={X(guess)} x2={X(guess)} y1={m.top - 8} y2={Y(0)}
-            stroke="var(--rule)" strokeWidth={1.5} />
-      <text x={X(guess) - 6} y={m.top - 12} textAnchor="end" fontSize={10.5}
-            fill="var(--text-secondary)">first guess {guess.toFixed(2)}σ</text>
-      <line x1={X(mean)} x2={X(mean)} y1={m.top + 6} y2={Y(0)}
-            stroke="var(--neg)" strokeWidth={2} />
-      <text x={X(mean) + 6} y={m.top + 2} textAnchor="start" fontSize={10.5}
-            fill="var(--text-secondary)">average {mean.toFixed(2)}σ</text>
-      <text x={(m.left + w - m.right) / 2} y={h - 6} textAnchor="middle"
-            fontSize={10.5} fill="var(--text-secondary)">
-        score of the best of {n} rules, over many repeats
       </text>
     </svg>
   );

@@ -17,7 +17,7 @@ await build({
     contents: `
       import { renderToStaticMarkup } from "react-dom/server";
       import { createElement as h } from "react";
-      import { MaxDistribution, NumberLine, SearchCostCurve } from "../src/pages/GuideViz.tsx";
+      import { NumberLine, SearchCostCurve } from "../src/pages/GuideViz.tsx";
       import Guide from "../src/pages/Guide.tsx";
       import { computeToy, COINS } from "../src/pages/toyCalc.ts";
       const t = computeToy();
@@ -37,8 +37,6 @@ await build({
       export const render = (vals) => renderToStaticMarkup(h(NumberLine, { values: vals }));
       export const renderStatic = {
         "search cost curve": () => renderToStaticMarkup(h(SearchCostCurve)),
-        "max distribution": () => renderToStaticMarkup(
-          h(MaxDistribution, { n: 44, guess: 2.0004, mean: 2.2269 })),
       };
       export const renderGuide = () => renderToStaticMarkup(h(Guide));
     `,
