@@ -77,9 +77,12 @@ export default function Guide() {
             </tbody>
           </table>
         </div>
-        <Figure caption="D climbs the most in price. Keep an eye on it.">
+        <Figure caption="D climbs the most in price. Keep an eye on it — the prices continue past day 4, but sections 2 and 3 use only these.">
           <div className="row" style={{ gap: 22, justifyContent: "center", flexWrap: "wrap" }}>
-            {COINS.map((c) => <Sparkline key={c} label={c} prices={PRICES[c]} />)}
+            {COINS.map((c) => (
+              <Sparkline key={c} label={c}
+                         prices={PRICES[c].slice(0, WALKTHROUGH_DAYS)} />
+            ))}
           </div>
         </Figure>
       </section>

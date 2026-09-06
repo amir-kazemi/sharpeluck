@@ -140,6 +140,25 @@ for (const [name, svg] of svgs) {
   });
 }
 
+// Section 1's table and its sparklines must plot the same days. Extending the
+// price series once left the table at four days and the charts at ten.
+{
+  const guide = renderGuide();
+  const setup = guide.slice(guide.indexOf('id="setup"'));
+  const section = setup.slice(0, setup.indexOf("<section"));
+  const rows = [...section.matchAll(/<tr>((?:(?!<\/tr>).)*)<\/tr>/gs)]
+    .map(([, r]) => (r.match(/<td[^>]*>/g) ?? []).length).filter((n) => n > 0).length;
+  const paths = [...section.matchAll(/<path d="([^"]+)"/g)]
+    .map(([, d]) => (d.match(/[ML]/g) ?? []).length);
+  if (!rows || !paths.length) fail("setup section", "expected a price table and sparklines");
+  for (const pts of paths) {
+    if (pts !== rows) {
+      fail("setup section", `table shows ${rows} days but a sparkline plots ${pts}`);
+    }
+  }
+  if (!failures) console.log(`  ✓ setup section  table ${rows} days = ${paths.length} sparklines × ${paths[0]} points`);
+}
+
 try { unlinkSync(OUT); } catch {}
 if (failures) { console.log(`\n${failures} geometry problem(s)`); process.exit(1); }
 console.log("\nall diagram geometry checks pass");
