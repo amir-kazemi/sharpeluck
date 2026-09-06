@@ -1,5 +1,5 @@
-import { Fragment } from "react";
 import { linear, padded } from "../charts/primitives";
+import { expectedBestOfN } from "./toyCalc";
 
 /** Small illustrative diagrams for the walkthrough. Unlike the app's data
  *  charts these have no hover layer: every value that matters is already a
@@ -173,51 +173,97 @@ export function DivergingBars({ items }: { items: { coin: string; weight: number
 }
 
 const FAMILIES = [
-  { name: "price change", windows: [12, 24, 72, 168, 336] },
-  { name: "volatility", windows: [24, 72, 168] },
-  { name: "buy pressure", windows: [24, 72, 168] },
+  { name: "price change", windows: 5 },
+  { name: "volatility", windows: 3 },
+  { name: "buy pressure", windows: 3 },
 ];
 
-/** The 44-trial grid, literally: 11 columns (one per window, grouped by
- *  signal family) times 4 rows (raw/negated x 6h/24h). Counting the cells is
- *  the point, so they carry no value -- only presence. */
-export function TrialGrid() {
-  const cols = FAMILIES.flatMap((f) => f.windows.map((w) => `${w}h`));
-  const rows = ["6h · raw", "6h · negated", "24h · raw", "24h · negated"];
-  const famEdges = new Set(
-    FAMILIES.slice(0, -1).reduce<number[]>((acc, f, i) => {
-      const prev = acc[i - 1] ?? 0;
-      return [...acc, prev + f.windows.length];
-    }, []),
-  );
+/** Where "11 expressions" comes from -- as labelled text, because the count is
+ *  a fact to read, not a quantity to compare. An earlier version drew all 44
+ *  trials as identical rectangles, which encoded no variable and left the three
+ *  families unlabelled: strictly worse than the sentence underneath it. */
+export function SearchBreakdown() {
+  const total = FAMILIES.reduce((a, f) => a + f.windows, 0);
   return (
-    <div>
-      <div style={{ display: "grid", gridTemplateColumns: `6.5em repeat(${cols.length}, 1fr)`, gap: 3 }}>
-        <div />
-        {cols.map((c, i) => (
-          <div key={i} className="help" style={{ textAlign: "center", marginLeft: famEdges.has(i) ? 8 : 0 }}>
-            {c}
-          </div>
-        ))}
-        {rows.map((rl, ri) => (
-          <Fragment key={rl}>
-            <div className="help" style={{ textAlign: "right", paddingRight: 6, alignSelf: "center" }}>
-              {rl}
-            </div>
-            {cols.map((_, ci) => (
-              <div key={ci} style={{
-                height: 15, borderRadius: 2, background: "var(--series-1)",
-                opacity: 0.5, marginTop: ri === 2 ? 5 : 0, marginLeft: famEdges.has(ci) ? 8 : 0,
-              }} />
-            ))}
-          </Fragment>
-        ))}
-      </div>
-      <div className="help" style={{ marginTop: 10 }}>
-        {cols.length} expressions × 2 signs × 2 rebalance frequencies ={" "}
-        {cols.length * 2 * 2} cells — count them.
+    <div style={{ display: "grid", gap: 8 }}>
+      {FAMILIES.map((f) => (
+        <div key={f.name} className="row" style={{ gap: 10 }}>
+          <span className="sub" style={{ minWidth: "9em" }}>{f.name}</span>
+          <span className="sub" style={{ color: "var(--muted)" }}>
+            {f.windows} lookback window{f.windows === 1 ? "" : "s"}
+          </span>
+        </div>
+      ))}
+      <div className="row" style={{ gap: 10, borderTop: "1px solid var(--grid)", paddingTop: 8 }}>
+        <span className="sub" style={{ minWidth: "9em" }}><strong>{total} expressions</strong></span>
+        <span className="sub" style={{ color: "var(--muted)" }}>
+          × 2 signs × 2 rebalance frequencies = <strong>{total * 4} trials</strong>
+        </span>
       </div>
     </div>
+  );
+}
+
+/** What a wider search costs you: the Sharpe the best of N trials reaches with
+ *  no real edge at all. Same expression as the audit layer's SR0, in units of
+ *  trial-Sharpe sigma so it needs no data to be read. */
+const MARKS = [
+  { n: 11, label: "11 signals" },
+  { n: 44, label: "44 trials" },
+  { n: 500, label: "500 trials" },
+];
+
+export function SearchCostCurve() {
+  const w = 460, h = 190;
+  const m = { top: 30, right: 22, bottom: 34, left: 40 };
+  const lgLo = Math.log10(2), lgHi = 3;
+  const x = linear(lgLo, lgHi, m.left, w - m.right);
+  const y = linear(0, 3.4, h - m.bottom, m.top);
+
+  const pts = Array.from({ length: 90 }, (_, i) => {
+    const lg = lgLo + (i / 89) * (lgHi - lgLo);
+    const n = Math.pow(10, lg);
+    return { lg, v: expectedBestOfN(n) };
+  });
+  const d = pts.map((p, i) => `${i ? "L" : "M"}${x(p.lg)},${y(p.v)}`).join(" ");
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMinYMid meet">
+      {[0, 1, 2, 3].map((t) => (
+        <g key={t}>
+          <line x1={m.left} x2={w - m.right} y1={y(t)} y2={y(t)}
+                stroke="var(--grid)" strokeWidth={1} />
+          <text x={m.left - 7} y={y(t)} dy="0.32em" textAnchor="end"
+                fontSize={10} fill="var(--muted)">{t}σ</text>
+        </g>
+      ))}
+      {[2, 10, 100, 1000].map((n) => (
+        <text key={n} x={x(Math.log10(n))} y={h - m.bottom + 15} textAnchor="middle"
+              fontSize={10} fill="var(--muted)">{n}</text>
+      ))}
+      <line x1={m.left} x2={w - m.right} y1={h - m.bottom} y2={h - m.bottom}
+            stroke="var(--axis)" strokeWidth={1} />
+      <path d={d} fill="none" stroke="var(--series-1)" strokeWidth={2}
+            strokeLinejoin="round" strokeLinecap="round" />
+      {MARKS.map(({ n, label }) => {
+        const v = expectedBestOfN(n);
+        return (
+          <g key={n}>
+            <circle cx={x(Math.log10(n))} cy={y(v)} r={4.5} fill="var(--series-1)"
+                    stroke="var(--surface-1)" strokeWidth={2} />
+            <text x={x(Math.log10(n))} y={y(v) - 9} textAnchor="middle" fontSize={10.5}
+                  fill="var(--text-secondary)" stroke="var(--surface-1)"
+                  strokeWidth={3} paintOrder="stroke">
+              {label} · {v.toFixed(2)}σ
+            </text>
+          </g>
+        );
+      })}
+      <text x={(m.left + w - m.right) / 2} y={h - 6} textAnchor="middle"
+            fontSize={10.5} fill="var(--text-secondary)">
+        number of trials searched
+      </text>
+    </svg>
   );
 }
 

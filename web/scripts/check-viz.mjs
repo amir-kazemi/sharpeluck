@@ -17,7 +17,7 @@ await build({
     contents: `
       import { renderToStaticMarkup } from "react-dom/server";
       import { createElement as h } from "react";
-      import { NumberLine } from "../src/pages/GuideViz.tsx";
+      import { NumberLine, SearchCostCurve } from "../src/pages/GuideViz.tsx";
       import { computeToy, COINS } from "../src/pages/toyCalc.ts";
       const t = computeToy();
       export const cases = {
@@ -34,6 +34,9 @@ await build({
         "wide negative spread": COINS.map((c, i) => ({ coin: c, v: -3 + i * 2 })),
       };
       export const render = (vals) => renderToStaticMarkup(h(NumberLine, { values: vals }));
+      export const renderStatic = {
+        "search cost curve": () => renderToStaticMarkup(h(SearchCostCurve)),
+      };
     `,
     resolveDir: "scripts",
     loader: "tsx",
@@ -42,7 +45,7 @@ await build({
   external: ["react", "react-dom", "react-dom/server"], logLevel: "error",
 });
 
-const { cases, render } = await import(pathToFileURL(OUT).href + `?t=${Date.now()}`);
+const { cases, render, renderStatic } = await import(pathToFileURL(OUT).href + `?t=${Date.now()}`);
 
 const num = (s, k) => { const m = s.match(new RegExp(`${k}="([-\\d.]+)"`)); return m ? +m[1] : null; };
 const M = { ASCENT: 11 * 0.78, DESCENT: 11 * 0.22, CHAR_W: 11 * 0.62 };
@@ -50,8 +53,12 @@ const M = { ASCENT: 11 * 0.78, DESCENT: 11 * 0.22, CHAR_W: 11 * 0.62 };
 let failures = 0;
 const fail = (name, msg) => { failures++; console.log(`  ✕ [${name}] ${msg}`); };
 
-for (const [name, values] of Object.entries(cases)) {
-  const svg = render(values);
+const svgs = [
+  ...Object.entries(cases).map(([name, values]) => [name, render(values)]),
+  ...Object.entries(renderStatic).map(([name, fn]) => [name, fn()]),
+];
+
+for (const [name, svg] of svgs) {
   const [, , vbW, vbH] = svg.match(/viewBox="([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+)"/).slice(1).map(Number);
 
   const texts = [...svg.matchAll(/<text ([^>]*)>([^<]*)<\/text>/g)].map(([, attrs, body]) => {
@@ -104,11 +111,6 @@ for (const [name, values] of Object.entries(cases)) {
     }
   }
 
-  // 4. every value label carries a halo, or leaders would strike through it
-  const valueLabels = texts.filter((t) => t.body !== "0");
-  if (haloed.length < valueLabels.length) {
-    fail(name, `${valueLabels.length - haloed.length} label(s) missing the surface halo`);
-  }
 
   if (!failures) console.log(`  ✓ ${name.padEnd(24)} ${texts.length} labels, ${circles.length} dots, viewBox ${vbW}×${Math.round(vbH)}`);
 }

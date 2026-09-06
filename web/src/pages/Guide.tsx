@@ -1,6 +1,7 @@
 import { COINS, computeToy, pct, PRICES, returns, signed } from "./toyCalc";
 import {
-  BellCurve, CategoryBars, DecliningLine, DivergingBars, NumberLine, Sparkline, SplitHalf, TrialGrid,
+  BellCurve, CategoryBars, DecliningLine, DivergingBars, NumberLine, SearchBreakdown,
+  SearchCostCurve, Sparkline, SplitHalf,
 } from "./GuideViz";
 
 function Toc() {
@@ -186,18 +187,27 @@ export default function Guide() {
         <h2>4. One trial among many</h2>
         <p>
           That was <strong>one trial</strong>: one measurement, one window, one
-          sign, one rebalance frequency. The real run doesn't try one trial —
-          it tries a whole grid of them, because a lookback of exactly 72 hours
-          being "the" right choice would itself be suspicious.
+          sign, one rebalance frequency. The real run doesn't try one — a
+          lookback of exactly 72 hours being &ldquo;the&rdquo; right choice
+          would itself be suspicious, so it sweeps a grid.
         </p>
-        <Figure caption="Every shaded cell is one trial. 11 expressions (5 price windows + 3 volatility + 3 buy-pressure) × 2 signs × 2 rebalance frequencies.">
-          <TrialGrid />
-        </Figure>
+        <SearchBreakdown />
         <p>
-          Widening this grid is not free. Every added trial is one more chance
-          for pure luck to produce an impressive-looking winner — which is
-          exactly what section 5 measures.
+          Widening that grid is <strong>not free</strong>, and this is the
+          number that makes the rest of the app necessary. Run a search on data
+          with <em>no real edge in it at all</em> and the best trial still comes
+          back positive, purely from luck — and the more trials you run, the
+          luckier the best one gets:
         </p>
+        <Figure caption="The expected best-of-N Sharpe when nothing has any edge, in units of how much trial Sharpes vary. Same expression the audit layer uses as its noise benchmark — see the Method panel.">
+          <SearchCostCurve />
+        </Figure>
+        <Callout>
+          Going from 11 trials to 44 raises the bar a winner must clear from
+          1.62σ to 2.23σ. Push to 500 and it is 3.05σ. You can always find a
+          better-looking strategy by searching harder — which is exactly why a
+          good-looking Sharpe, on its own, is not evidence of anything.
+        </Callout>
       </section>
 
       {/* ---------------------------------------------------------------- 5 */}
