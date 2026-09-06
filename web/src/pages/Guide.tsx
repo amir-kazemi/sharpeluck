@@ -202,11 +202,21 @@ export default function Guide() {
         <Figure caption="The expected best-of-N Sharpe when nothing has any edge, in units of how much trial Sharpes vary. Same expression the audit layer uses as its noise benchmark — see the Method panel.">
           <SearchCostCurve />
         </Figure>
+        <p>
+          <strong>What gets compared against that line?</strong> Run section 3's
+          positions across the whole history and they produce a single score —
+          the strategy's Sharpe ratio. That is the number on trial. And <strong>σ
+          is simply how spread out the 44 rules' scores are from one another</strong>:
+          if they scatter by 0.5 Sharpe, then 2.23σ means 2.23 × 0.5 ≈{" "}
+          <strong>1.1 Sharpe</strong>. So the winner has to clear roughly 1.1
+          before it counts as anything but luck — and clearing 0 counts for
+          nothing at all.
+        </p>
         <Callout>
-          Going from 11 trials to 44 raises the bar a winner must clear from
-          1.62σ to 2.23σ. Push to 500 and it is 3.05σ. You can always find a
-          better-looking strategy by searching harder — which is exactly why a
-          good-looking Sharpe, on its own, is not evidence of anything.
+          Going from 11 trials to 44 raises that bar from 1.62σ to 2.23σ; push
+          to 500 and it is 3.05σ. You can always find a better-looking strategy
+          by searching harder — but the bar rises with you, which is exactly why
+          a good-looking Sharpe on its own is not evidence of anything.
         </Callout>
       </section>
 
