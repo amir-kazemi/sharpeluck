@@ -199,11 +199,94 @@ Sharpe and the reality check are what actually did the rejecting here, and this
 is the concrete reason the platform reports four independent lenses rather than
 the one everybody quotes.
 
-## Run it
+## Running it
 
-    . scripts/env.sh
-    pytest -q
-    python scripts/ingest.py --months 2023-12 2024-01
-    python scripts/run.py --label baseline                        # fan out + audit
-    uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload    # API  :8000
-    cd web && npm run dev                                         # UI   :5173
+### First time only — build the environment
+
+Two layers, deliberately. The conda layer only pins an interpreter (the system
+Python is 3.9, too old for this code) and supplies Node; the venv on top is what
+actually isolates, because **a venv disables user-site and a conda env does
+not** — on a shared machine, anything in `~/.local/lib/python3.12/site-packages`
+otherwise sits ahead of the env on `sys.path` and shadows pinned versions.
+
+```bash
+conda create -p ./env python=3.12 -y
+conda install -p ./env -c conda-forge nodejs=22 -y     # LTS; a bare ">=22" resolves to an alpha
+./env/bin/python -m venv ./.venv                       # create at its final path -- never rename a venv
+./.venv/bin/pip install -r requirements.lock.txt
+cd web && npm install && cd ..
+```
+
+Both layers can live outside the repo (they do here, on scratch, because home
+has an inode quota). Point `scripts/env.sh` at them with
+`ALPHA_AUDIT_ENV_ROOT=/path/to/envs`; it defaults to `/scratch/$USER/alpha-audit`.
+
+### Every session — put the tools on PATH
+
+```bash
+cd /path/to/sharpeluck
+. scripts/env.sh
+```
+
+That gives you the project's `python`, `pytest`, `uvicorn`, `node` and `npm`.
+Check with `command -v python node`.
+
+### Get some data (once)
+
+```bash
+python scripts/ingest.py --months 2023-12 2024-01      # ~50 seed symbols, a couple of minutes
+python scripts/ingest.py --all-usdt --months 2022-01 2022-02 ...   # the full backfill; use Slurm
+```
+
+### Start the two servers — one terminal each
+
+**Terminal 1 — the API, on port 8000**
+
+```bash
+cd /path/to/sharpeluck
+. scripts/env.sh
+uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+On a cluster, add `ALPHA_AUDIT_SUBMIT` so a run submitted from the UI executes
+on a compute node instead of the machine serving the API — a full-breadth run
+will die on a login node:
+
+```bash
+ALPHA_AUDIT_SUBMIT="sbatch --export=ALL,RUN_ID={run_id} your batch script" \
+  uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+**Terminal 2 — the UI, on port 5173**
+
+```bash
+cd /path/to/sharpeluck
+. scripts/env.sh
+cd web && npm run dev
+```
+
+Then open **http://localhost:5173**. API docs are at **http://localhost:8000/docs**.
+
+### If the servers are on a remote machine
+
+Both bind to `127.0.0.1`, so reach them over an SSH tunnel. From a terminal or
+PowerShell on your own machine — targeting the *specific* login node the servers
+are running on, not a round-robin alias:
+
+```
+ssh -N -L 5173:127.0.0.1:5173 -L 8000:127.0.0.1:8000 you@login-node.your-cluster.example
+```
+
+Leave it running (`-N` prints nothing), then open `http://localhost:5173`.
+Those ports are shared with everyone else on a login node, so check first with
+`ss -ltn | grep -E '5173|8000'` and pick others if they are taken — `--port` on
+both servers and matching `-L` forwards.
+
+### Everything else
+
+```bash
+pytest -q                                  # 55 tests
+cd web && npm run build                    # typecheck + diagram geometry checks + bundle
+python scripts/run.py --label baseline     # a run from the command line
+python scripts/null_test.py --seeds 20     # the null-data self-test
+```
