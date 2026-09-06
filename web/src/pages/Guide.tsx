@@ -5,6 +5,7 @@ import {
   BellCurve, CategoryBars, DecliningLine, DivergingBars, NumberLine, PnlBars,
   SearchBreakdown, SearchCostCurve, Sparkline, SplitHalf,
 } from "./GuideViz";
+import { Tex } from "../components/Tex";
 
 function Toc() {
   const items = [
@@ -41,6 +42,11 @@ export default function Guide() {
   const dayFive = WALKTHROUGH_DAYS + 1;
   const ret5 = (c: (typeof COINS)[number]) =>
     PRICES[c][dayFive - 1] / PRICES[c][dayFive - 2] - 1;
+  // Built from the computed results, so the formula can never disagree with
+  // the chart above it.
+  const pnlSum = b.days
+    .map((d) => `${d.pnl >= 0 ? "+" : "-"}${Math.abs(d.pnl * 100).toFixed(3)}`)
+    .join("");
 
   return (
     <div style={{ display: "grid", gap: 28 }}>
@@ -239,11 +245,24 @@ export default function Guide() {
         </Figure>
         <p>
           That ratio — <strong>average return divided by how much it varies</strong> —
-          is the <strong>Sharpe ratio</strong>, and it is the single number a
-          trial is judged on. This toy scores{" "}
-          <strong>{b.sharpe.toFixed(2)}</strong>. (The real app multiplies by the
-          square root of the number of bars in a year to annualise it; doing that
-          to six observations would be theatre, so the raw ratio is shown here.)
+          is the <strong>Sharpe ratio</strong>, the single number a trial is
+          judged on. Writing π<sub>t</sub> for the P&amp;L on day t:
+        </p>
+        <Tex tex={String.raw`S \;=\; \frac{\operatorname{mean}_t\left(\pi_t\right)}
+                             {\operatorname{sd}_t\left(\pi_t\right)}
+                             \;=\; \frac{\dfrac{1}{T}\sum_{t=1}^{T}\pi_t}
+                             {\sqrt{\dfrac{1}{T}\sum_{t=1}^{T}\left(\pi_t-\bar\pi\right)^{2}}}`} />
+        <p>Substituting the {b.days.length} daily results from the chart above:</p>
+        <Tex tex={String.raw`S \;=\; \frac{\dfrac{1}{${b.days.length}}\left(${pnlSum}\right)\%}
+                             {${(b.sd * 100).toFixed(3)}\%}
+                             \;=\; \frac{${(b.avg * 100).toFixed(3)}\%}{${(b.sd * 100).toFixed(3)}\%}
+                             \;=\; ${b.sharpe.toFixed(3)}`} />
+        <p className="sub">
+          The denominator is the spread of those same six numbers around their
+          average: {(b.sd * 100).toFixed(3)}%. And the real app multiplies the
+          result by the square root of the number of bars in a year to annualise
+          it — doing that to six observations would be theatre, so the raw ratio
+          is shown here.
         </p>
         <Callout>
           A score of {b.sharpe.toFixed(2)} is essentially nothing — the strategy

@@ -10,6 +10,9 @@ export function Tex({ tex, display = true }: { tex: string; display?: boolean })
     throwOnError: false,
     output: "htmlAndMathml",
     strict: false,
+    // A bad expression renders in this colour rather than throwing; the build's
+    // formula check greps for exactly this, so the two must agree.
+    errorColor: "#cc0000",
   });
   return (
     <div className={display ? "formula" : undefined}

@@ -44,6 +44,8 @@ await build({
     loader: "tsx",
   },
   bundle: true, format: "esm", platform: "node", outfile: OUT,
+  // Guide now pulls in KaTeX, which imports a stylesheet; Node has no use for it.
+  loader: { ".css": "empty" },
   external: ["react", "react-dom", "react-dom/server"], logLevel: "error",
 });
 
@@ -138,6 +140,22 @@ for (const [name, svg] of svgs) {
     }
     if (!failures) console.log(`  ✓ table ${i + 1} ${String(headers).padStart(2)} columns × ${rows.length} rows`);
   });
+}
+
+// Formulas: KaTeX is configured with throwOnError:false so a bad expression
+// renders as a red fragment rather than blanking the page -- which means a
+// broken formula ships silently unless something looks for it. Checking the
+// rendered output rather than the source, because the source contains template
+// interpolation that is not valid LaTeX until it resolves.
+{
+  const guide = renderGuide();
+  const rendered = (guide.match(/class="katex"/g) ?? []).length;
+  // KaTeX with throwOnError:false does not mark errors with a class -- it just
+  // paints the offending token in errorColor. That colour is the only signal.
+  const errors = [...guide.matchAll(/mathcolor="#cc0000"><mtext>([^<]*)<\/mtext>/g)];
+  for (const [, tok] of errors) fail("formulas", `KaTeX could not parse ${tok}`);
+  if (!rendered) fail("formulas", "no formulas rendered at all");
+  if (!failures) console.log(`  ✓ formulas       ${rendered} rendered, 0 errors`);
 }
 
 // Section 1's table and its sparklines must plot the same days. Extending the
