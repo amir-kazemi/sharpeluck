@@ -317,47 +317,58 @@ export default function Guide() {
         </p>
 
         <p>
-          <strong>A useful first guess is about {z1.toFixed(0)}σ.</strong> With{" "}
-          {N} independent draws we expect roughly one observation in the top
-          1/{N} of the distribution, which puts the winner near the
-        </p>
-        <Tex tex={String.raw`1-\frac{1}{${N}} = ${p1.toFixed(4)}`} />
-        <p>
-          quantile of a normal distribution — and that quantile sits almost
-          exactly at {z1.toFixed(2)}σ, since{" "}
-          {(normCdf(2) * 100).toFixed(2)}% of a bell curve lies below 2. So{" "}
-          {z1.toFixed(0)}σ is a sensible first estimate.
+          Each of the {N} rules produces one score, and{" "}
+          <strong>the winner is simply the highest-scoring of them</strong> —
+          whichever rule came top. Note that a winner always exists, however
+          badly the whole batch did: if every score is poor, the winner is just
+          the least-bad one. It is the top of the pile, not a rule that passed
+          anything. So the question is where the top of a pile of {N} noisy
+          scores tends to sit.
         </p>
 
         <p>
-          <strong>But 2σ is too low, and here is why.</strong> Run the whole
-          experiment once — {N} useless rules — and you get one winner with one
-          score. Run it again with fresh noise and the winner scores something
-          different. The winner's score is itself a random quantity, so 2σ is
-          not where it lands; it is a level it usually <em>clears</em>.
+          <strong>A first guess: somewhere above {z1.toFixed(0)}σ.</strong> One
+          score in {N} should land in the top 1/{N} of the distribution — that
+          is, above the
+        </p>
+        <Tex tex={String.raw`1-\frac{1}{${N}} = ${p1.toFixed(4)}`} />
+        <p>
+          quantile of a normal distribution, which sits almost exactly at{" "}
+          {z1.toFixed(2)}σ ({(normCdf(2) * 100).toFixed(2)}% of a bell curve lies
+          below 2). If roughly one score should exceed that level, the winner —
+          the largest of them — should exceed it too.
+        </p>
+
+        <p>
+          <strong>But that is a floor, not an answer.</strong> Run the whole
+          experiment once and you get one winner with one score; run it again
+          with fresh noise and the winner scores something different. The
+          winner's score is itself random, so the useful question is not where
+          it sits but how far above {z1.toFixed(0)}σ it typically gets.
         </p>
         <p>
-          How usually? For the winner to fall <em>below</em> 2σ, all {N} draws
-          must fall below it — and each does so with probability 1 − 1/{N}:
+          First, how reliably does it clear {z1.toFixed(0)}σ at all? The top
+          score is below {z1.toFixed(0)}σ exactly when <em>every one</em> of
+          the {N} scores is below it — one score above is enough to lift the
+          top above too — and each falls below with probability 1 − 1/{N}:
         </p>
         <Tex tex={String.raw`P(\text{winner} \le ${z1.toFixed(2)}\sigma)
           = \left(1-\frac{1}{${N}}\right)^{${N}} = ${Math.pow(1 - 1 / N, N).toFixed(2)}
           \qquad\Longrightarrow\qquad
           P(\text{winner} > ${z1.toFixed(2)}\sigma) = ${(1 - Math.pow(1 - 1 / N, N)).toFixed(2)}`} />
         <p>
-          So the winner beats the first guess about{" "}
+          So the winner clears the floor about{" "}
           {((1 - Math.pow(1 - 1 / N, N)) * 100).toFixed(0)}% of the time — and
-          that is not a quirk of {N}. Since (1 − 1/N)<sup>N</sup> → 1/e, picking
-          the (1 − 1/N) quantile always leaves the winner beating it roughly{" "}
-          {((1 - 1 / Math.E) * 100).toFixed(0)}% of the time, whatever N is.
+          that is not a quirk of {N}. Since (1 − 1/N)<sup>N</sup> → 1/e, the
+          (1 − 1/N) quantile is beaten roughly{" "}
+          {((1 - 1 / Math.E) * 100).toFixed(0)}% of the time whatever N is.
         </p>
         <p>
-          And the winner occasionally lands far above — 3σ or beyond — which
-          pulls its <em>average</em> higher still, above the level it typically
-          reaches. For {N} draws that average is{" "}
-          <strong>{bestOf44.toFixed(2)}σ</strong>, the value marked on the chart
-          above. That is the number we want: what a search of this size
-          typically hands you, not its best case or its worst.
+          Second, it sometimes clears the floor by a wide margin — the winner
+          occasionally reaches 3σ or beyond, and those rare outcomes pull the
+          average up. Averaged over many repeats, the winner of {N} scores
+          reaches <strong>{bestOf44.toFixed(2)}σ</strong>: the value marked on
+          the chart above, and what a search of this size typically hands you.
         </p>
         <p>
           Computing that average directly means blending two quantiles rather
