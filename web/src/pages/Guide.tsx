@@ -305,71 +305,80 @@ export default function Guide() {
         <Figure caption="The expected best-of-N Sharpe when nothing has any edge, in units of how much trial Sharpes vary. Same expression the audit layer uses as its noise benchmark — see the Method panel.">
           <SearchCostCurve />
         </Figure>
-        <h3>Where {bestOf44.toFixed(2)} comes from</h3>
+        <h3>The best of {N} can look good even when every rule is useless</h3>
         <p>
-          <strong>A first guess — which will turn out to be too low.</strong>{" "}
-          Draw N numbers from a bell curve and the largest usually lands near
-          the <strong>(1 − 1/N)</strong> percentile: with {N} draws, about one
-          part in {N} of the curve sits above it. That percentile is{" "}
-          {p1.toFixed(4)}.
+          Suppose all {N} rules have no real edge at all. Their measured scores
+          will still bounce around, because of noise. Most will land near zero.
+          Some will look bad. And simply because we tried {N} of them, one will
+          usually look unusually good.
         </p>
         <p>
-          Now the reverse question: <em>which point on the bell curve has{" "}
-          {(p1 * 100).toFixed(2)}% of it below?</em> That is the familiar
-          two-standard-deviations mark — {(normCdf(2) * 100).toFixed(2)}% of a
-          bell curve lies below 2 — so the answer is {z1.toFixed(2)}. Write
-          Φ<sup>−1</sup> for that reverse lookup, percentile in and position on
-          the curve out:
+          The question is: <strong>how good should the best one look, purely by
+          chance?</strong>
         </p>
-        <Tex tex={String.raw`\Phi^{-1}\!\left(1-\frac{1}{${N}}\right)
-          = \Phi^{-1}\!\left(${p1.toFixed(4)}\right) = ${z1.toFixed(2)}`} />
+
         <p>
-          <strong>The answer is {bestOf44.toFixed(2)}, not {z1.toFixed(2)}.</strong>{" "}
-          A maximum clears {z1.toFixed(2)} about {(pExceeds * 100).toFixed(0)}% of
-          the time, so that level is nowhere near its average. The distribution of a
-          maximum leans to the right — it seldom falls far below that level and
-          occasionally lands well above — so its <em>average</em> sits higher
-          still. The expression below blends two percentiles to land on that
-          average — <strong>{bestOf44.toFixed(2)}</strong>, the value marked on
-          the chart above — rather than on the first guess. γ here is the
-          Euler–Mascheroni constant, {EULER_GAMMA.toFixed(4)}:
+          <strong>A useful first guess is about {z1.toFixed(0)}σ.</strong> With{" "}
+          {N} independent draws we expect roughly one observation in the top
+          1/{N} of the distribution, which puts the winner near the
         </p>
-        <Tex tex={String.raw`\mathbb{E}\!\left[\max_{N}\right]
-          = (1-\gamma)\,\Phi^{-1}\!\left(1-\frac{1}{N}\right)
-          + \gamma\,\Phi^{-1}\!\left(1-\frac{1}{N e}\right)`} />
-        <p>Substituting N = {N} gives the average, not the estimate:</p>
+        <Tex tex={String.raw`1-\frac{1}{${N}} = ${p1.toFixed(4)}`} />
+        <p>
+          quantile of a normal distribution — and that quantile sits almost
+          exactly at {z1.toFixed(2)}σ, since{" "}
+          {(normCdf(2) * 100).toFixed(2)}% of a bell curve lies below 2. So{" "}
+          {z1.toFixed(0)}σ is a sensible first estimate.
+        </p>
+
+        <p>
+          <strong>But it is slightly too low for the average winner.</strong> The
+          maximum does not always stop near {z1.toFixed(0)}σ — it clears that
+          level about {(pExceeds * 100).toFixed(0)}% of the time, sometimes
+          reaching 2.5σ, 3σ or more, and those larger outcomes pull its average
+          upward. For {N} independent normal draws the expected maximum is
+        </p>
+        <Tex tex={String.raw`\mathbb{E}\!\left[\max_{${N}}\right] = ${bestOf44.toFixed(2)}\,\sigma`} />
+        <p>
+          <strong>That is the number that matters here</strong> — the value
+          marked on the chart above. It comes from an expression that blends two
+          quantiles rather than taking the single one from the first guess (γ is
+          the Euler–Mascheroni constant, {EULER_GAMMA.toFixed(4)}):
+        </p>
         <Tex tex={String.raw`\begin{aligned}
-          \mathbb{E}\!\left[\max_{${N}}\right]
-          &= ${(1 - EULER_GAMMA).toFixed(4)}\cdot\Phi^{-1}(${p1.toFixed(4)})
-           + ${EULER_GAMMA.toFixed(4)}\cdot\Phi^{-1}(${p2.toFixed(4)}) \\[2pt]
+          \mathbb{E}\!\left[\max_{N}\right]
+          &= (1-\gamma)\,\Phi^{-1}\!\left(1-\frac{1}{N}\right)
+           + \gamma\,\Phi^{-1}\!\left(1-\frac{1}{N e}\right) \\[4pt]
           &= ${(1 - EULER_GAMMA).toFixed(4)}\cdot ${z1.toFixed(4)}
-           + ${EULER_GAMMA.toFixed(4)}\cdot ${z2.toFixed(4)} \\[2pt]
-          &= ${((1 - EULER_GAMMA) * z1).toFixed(4)} + ${(EULER_GAMMA * z2).toFixed(4)}
+           + ${EULER_GAMMA.toFixed(4)}\cdot ${z2.toFixed(4)}
            \;=\; ${bestOf44.toFixed(4)}\,\sigma
           \end{aligned}`} />
-
-        <h3>Reading σ as a Sharpe</h3>
-        <p>
-          σ is <strong>how spread out the {N} rules' scores are from one
-          another</strong>. Multiply to convert — if those scores scatter by{" "}
-          {exampleSpread} Sharpe, say:
-        </p>
-        <Tex tex={String.raw`\text{bar to clear}
-          \;=\; \mathbb{E}\!\left[\max_{${N}}\right]\times s
-          \;=\; ${bestOf44.toFixed(2)}\times ${exampleSpread}
-          \;\approx\; ${(bestOf44 * exampleSpread).toFixed(1)}`} />
         <p className="sub">
-          So the number on trial — the {b.sharpe.toFixed(2)} from section 4 —
-          would need to clear about {(bestOf44 * exampleSpread).toFixed(1)},
-          not 0. Beating zero counts for nothing.
+          where Φ<sup>−1</sup> is the reverse lookup used above: percentile in,
+          position on the curve out.
+        </p>
+
+        <h3>Now translate it into Sharpe units</h3>
+        <p>
+          If the {N} rules' measured Sharpes have a standard deviation of{" "}
+          {exampleSpread}, then the best-looking rule among them would be
+          expected to reach roughly
+        </p>
+        <Tex tex={String.raw`${bestOf44.toFixed(2)} \times ${exampleSpread}
+          \;\approx\; ${(bestOf44 * exampleSpread).toFixed(1)}`} />
+        <p>
+          Sharpe <em>even if every rule had a true Sharpe of zero</em>. So after
+          searching through {N} rules, a Sharpe near{" "}
+          {(bestOf44 * exampleSpread).toFixed(1)} is not automatically
+          impressive — it may simply be the lucky winner the search produced.
+          (Section 4's rule scored {b.sharpe.toFixed(2)}, so it is not close.)
         </p>
         <Callout>
-          The bar rises with the size of the search:{" "}
-          {expectedBestOfN(11).toFixed(2)}σ at 11 trials,{" "}
-          {bestOf44.toFixed(2)}σ at {N}, {expectedBestOfN(500).toFixed(2)}σ at 500.
-          You can always find a better-looking strategy by searching harder — but
-          you raise the bar by doing so, which is why a good-looking Sharpe on its
-          own is not evidence of anything.
+          And the more rules you try, the stronger that lucky winner tends to
+          become: {expectedBestOfN(11).toFixed(2)}σ at 11 trials,{" "}
+          {bestOf44.toFixed(2)}σ at {N}, {expectedBestOfN(500).toFixed(2)}σ at
+          500. Searching harder does not just give you more opportunities to
+          find a real strategy — it gives noise more opportunities to look
+          convincing.
         </Callout>
       </section>
 
