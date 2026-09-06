@@ -307,21 +307,21 @@ export default function Guide() {
         </Figure>
         <h3>Where {bestOf44.toFixed(2)} comes from</h3>
         <p>
-          <strong>First, a rough estimate.</strong> Draw N numbers from a bell
-          curve and the largest usually lands near the <strong>(1 − 1/N)</strong>{" "}
-          percentile — with {N} draws, about one part in {N} of the curve should
-          sit above it. That percentile is {p1.toFixed(4)}, and the score there
-          is <strong>{z1.toFixed(2)}</strong>.
+          <strong>A first guess — which will turn out to be too low.</strong>{" "}
+          Draw N numbers from a bell curve and the largest usually lands near
+          the <strong>(1 − 1/N)</strong> percentile: with {N} draws, about one
+          part in {N} of the curve sits above it. That percentile is{" "}
+          {p1.toFixed(4)}, and the score sitting at it is {z1.toFixed(2)}.
         </p>
         <p>
-          <strong>But {z1.toFixed(2)} is not the answer.</strong> It is a level
-          the largest of {N} draws actually clears about{" "}
-          {(pExceeds * 100).toFixed(0)}% of the time. The distribution of a
+          <strong>The answer is {bestOf44.toFixed(2)}, not {z1.toFixed(2)}.</strong>{" "}
+          A maximum clears {z1.toFixed(2)} about {(pExceeds * 100).toFixed(0)}% of
+          the time, so that level is nowhere near its average. The distribution of a
           maximum leans to the right — it seldom falls far below that level and
           occasionally lands well above — so its <em>average</em> sits higher
-          still, at <strong>{bestOf44.toFixed(2)}</strong>. The expression below
-          blends two percentiles to land on that average rather than the rough
-          estimate. Φ<sup>−1</sup> turns a percentile into a score, and γ is the
+          still. The expression below blends two percentiles to land on that
+          average — <strong>{bestOf44.toFixed(2)}</strong>, the value marked on
+          the chart above — rather than on the first guess. Φ<sup>−1</sup> turns a percentile into a score, and γ is the
           Euler–Mascheroni constant ({EULER_GAMMA.toFixed(4)}):
         </p>
         <Tex tex={String.raw`\mathbb{E}\!\left[\max_{N}\right]
