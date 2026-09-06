@@ -266,8 +266,8 @@ export default function Guide() {
         </p>
         <Callout>
           A score of {b.sharpe.toFixed(2)} is essentially nothing — the strategy
-          alternates gains and losses because it is short the one coin that keeps
-          bouncing. But here is the honest problem: <strong>you cannot tell
+          alternates gains and losses because it is shorting the one coin that
+          keeps bouncing. But here is the honest problem: <strong>you cannot tell
           whether {b.sharpe.toFixed(2)} is good or bad without knowing what a
           rule with no skill at all would have scored.</strong> That is what the
           next two sections work out.
