@@ -10,12 +10,21 @@
 export const COINS = ["A", "B", "C", "D"] as const;
 export type Coin = (typeof COINS)[number];
 
+/** Ten days, each coin keeping its character: A choppy, B steadily declining,
+ *  C oscillating tightly, D trending smoothly up. Sections 1-3 use the first
+ *  four; the rest exist so positions have somewhere to be held into and the
+ *  walkthrough can end in an actual score rather than asserting one. */
 export const PRICES: Record<Coin, number[]> = {
-  A: [100, 102, 105, 103],
-  B: [100, 99, 97, 96],
-  C: [100, 101, 100, 99],
-  D: [100, 103, 108, 112],
+  A: [100, 102, 105, 103, 107, 104, 108, 105, 109, 106],
+  B: [100, 99, 97, 96, 95, 94, 93, 92, 91, 90],
+  C: [100, 101, 100, 99, 100, 99, 100, 99, 100, 99],
+  D: [100, 103, 108, 112, 116, 119, 123, 126, 130, 133],
 };
+
+/** Sections 1-3 walk through this many days; the volatility window needs three
+ *  returns, so day 4 is the first on which a position can be formed. */
+export const WALKTHROUGH_DAYS = 4;
+export const VOL_WINDOW = 3;
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const std = (xs: number[]) => {
@@ -31,8 +40,40 @@ function byCoin<T>(f: (c: Coin) => T): Record<Coin, T> {
   return Object.fromEntries(COINS.map((c) => [c, f(c)])) as Record<Coin, T>;
 }
 
+/** Weights formed at the close of day `day` (1-based), using the trailing
+ *  VOL_WINDOW returns. This is exactly the procedure sections 2 and 3 walk
+ *  through, applied at an arbitrary day. */
+export function positionsAt(day: number) {
+  const window = byCoin((c) => returns(PRICES[c].slice(day - VOL_WINDOW - 1, day)));
+  const vol = byCoin((c) => std(window[c]));
+  const vs = COINS.map((c) => vol[c]);
+  const m = mean(vs), sd = std(vs);
+  const negZ = byCoin((c) => -(vol[c] - m) / sd);
+  const sumAbs = COINS.reduce((a, c) => a + Math.abs(negZ[c]), 0);
+  return byCoin((c) => negZ[c] / sumAbs);
+}
+
+/** Hold each day's positions into the next day and collect the P&L. */
+export function backtestToy() {
+  const days: { day: number; pnl: number; weights: Record<Coin, number> }[] = [];
+  const lastDay = PRICES.A.length;
+  for (let d = VOL_WINDOW + 1; d < lastDay; d++) {
+    const weights = positionsAt(d);
+    const pnl = COINS.reduce((acc, c) => {
+      const r = PRICES[c][d] / PRICES[c][d - 1] - 1;   // day d -> d+1
+      return acc + weights[c] * r;
+    }, 0);
+    days.push({ day: d + 1, pnl, weights });
+  }
+  const pnls = days.map((x) => x.pnl);
+  const avg = mean(pnls);
+  const sd = std(pnls);
+  return { days, avg, sd, sharpe: sd === 0 ? 0 : avg / sd };
+}
+
 export function computeToy() {
-  const rets = byCoin((c) => returns(PRICES[c]));
+  const first = byCoin((c) => PRICES[c].slice(0, WALKTHROUGH_DAYS));
+  const rets = byCoin((c) => returns(first[c]));
   const vol = byCoin((c) => std(rets[c]));
   const volValues = COINS.map((c) => vol[c]);
   const volMean = mean(volValues);

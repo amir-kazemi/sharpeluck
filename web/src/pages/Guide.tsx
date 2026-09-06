@@ -1,4 +1,6 @@
-import { COINS, computeToy, pct, PRICES, returns, signed } from "./toyCalc";
+import {
+  backtestToy, COINS, computeToy, pct, PRICES, returns, signed, WALKTHROUGH_DAYS,
+} from "./toyCalc";
 import {
   BellCurve, CategoryBars, DecliningLine, DivergingBars, NumberLine, SearchBreakdown,
   SearchCostCurve, Sparkline, SplitHalf,
@@ -9,8 +11,9 @@ function Toc() {
     ["setup", "1. A toy universe"],
     ["ranking", "2. From price to a ranking"],
     ["weighting", "3. From ranking to a position"],
-    ["trial-grid", "4. One trial among many"],
-    ["four-tests", "5. Why the winner isn't enough"],
+    ["scoring", "4. From a position to a score"],
+    ["trial-grid", "5. One trial among many"],
+    ["four-tests", "6. Why the winner isn't enough"],
   ] as const;
   return (
     <nav className="guide-toc">
@@ -34,6 +37,10 @@ function Figure({ caption, children }: { caption: string; children: React.ReactN
 
 export default function Guide() {
   const t = computeToy();
+  const b = backtestToy();
+  const dayFive = WALKTHROUGH_DAYS + 1;
+  const ret5 = (c: (typeof COINS)[number]) =>
+    PRICES[c][dayFive - 1] / PRICES[c][dayFive - 2] - 1;
 
   return (
     <div style={{ display: "grid", gap: 28 }}>
@@ -61,7 +68,7 @@ export default function Guide() {
               <tr><th>day</th>{COINS.map((c) => <th key={c}>{c}</th>)}</tr>
             </thead>
             <tbody>
-              {[0, 1, 2, 3].map((d) => (
+              {Array.from({ length: WALKTHROUGH_DAYS }, (_, d) => (
                 <tr key={d}>
                   <td>{d + 1}</td>
                   {COINS.map((c) => <td key={c}>{PRICES[c][d]}</td>)}
@@ -183,8 +190,70 @@ export default function Guide() {
       </section>
 
       {/* ---------------------------------------------------------------- 4 */}
+      <section id="scoring" className="guide-section">
+        <h2>4. From a position to a score</h2>
+        <p>
+          Positions alone are not a result. You hold them into the next day and
+          see what they earn: each coin's return, multiplied by the weight you
+          were holding, added up.
+        </p>
+        <div className="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>coin</th><th>weight held</th>
+                <th>day {WALKTHROUGH_DAYS}→{dayFive} return</th><th>contribution</th>
+              </tr>
+            </thead>
+            <tbody>
+              {COINS.map((c) => (
+                <tr key={c}>
+                  <td>{c}</td>
+                  <td>{signed(t.weight[c] * 100, 1)}%</td>
+                  <td>{pct(ret5(c), 2)}</td>
+                  <td>{signed(t.weight[c] * ret5(c) * 100, 3)}%</td>
+                </tr>
+              ))}
+              <tr>
+                <td><strong>day {dayFive} P&amp;L</strong></td>
+                <td /><td />
+                <td><strong>{signed(b.days[0].pnl * 100, 3)}%</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Then you do it again the next day, and the next — re-ranking, re-weighting,
+          re-holding. Over the toy's ten days that gives {b.days.length} daily results:
+        </p>
+        <Figure caption={
+          `Average ${pct(b.avg, 3)} per day, varying by ${pct(b.sd, 3)}. `
+          + `Score = average ÷ variation = ${b.sharpe.toFixed(3)}.`
+        }>
+          <CategoryBars fmt={(v) => pct(v, 2)}
+                        items={b.days.map((d) => ({ label: `d${d.day}`, value: d.pnl }))} />
+        </Figure>
+        <p>
+          That ratio — <strong>average return divided by how much it varies</strong> —
+          is the <strong>Sharpe ratio</strong>, and it is the single number a
+          trial is judged on. This toy scores{" "}
+          <strong>{b.sharpe.toFixed(2)}</strong>. (The real app multiplies by the
+          square root of the number of bars in a year to annualise it; doing that
+          to six observations would be theatre, so the raw ratio is shown here.)
+        </p>
+        <Callout>
+          A score of {b.sharpe.toFixed(2)} is essentially nothing — the strategy
+          alternates gains and losses because it is short the one coin that keeps
+          bouncing. But here is the honest problem: <strong>you cannot tell
+          whether {b.sharpe.toFixed(2)} is good or bad without knowing what a
+          rule with no skill at all would have scored.</strong> That is what the
+          next two sections work out.
+        </Callout>
+      </section>
+
+      {/* ---------------------------------------------------------------- 5 */}
       <section id="trial-grid" className="guide-section">
-        <h2>4. One trial among many</h2>
+        <h2>5. One trial among many</h2>
         <p>
           That was <strong>one trial</strong>: one measurement, one window, one
           sign, one rebalance frequency. The real run doesn't try one — a
@@ -203,10 +272,10 @@ export default function Guide() {
           <SearchCostCurve />
         </Figure>
         <p>
-          <strong>What gets compared against that line?</strong> Run section 3's
-          positions across the whole history and they produce a single score —
-          the strategy's Sharpe ratio. That is the number on trial. And <strong>σ
-          is simply how spread out the 44 rules' scores are from one another</strong>:
+          <strong>What gets compared against that line?</strong> The Sharpe ratio
+          from section 4 — the {b.sharpe.toFixed(2)} this toy rule scored. That is
+          the number on trial. And <strong>σ is simply how spread out the 44
+          rules' scores are from one another</strong>:
           if they scatter by 0.5 Sharpe, then 2.23σ means 2.23 × 0.5 ≈{" "}
           <strong>1.1 Sharpe</strong>. So the winner has to clear roughly 1.1
           before it counts as anything but luck — and clearing 0 counts for
@@ -220,9 +289,9 @@ export default function Guide() {
         </Callout>
       </section>
 
-      {/* ---------------------------------------------------------------- 5 */}
+      {/* ---------------------------------------------------------------- 6 */}
       <section id="four-tests" className="guide-section">
-        <h2>5. Why the winner isn't enough</h2>
+        <h2>6. Why the winner isn't enough</h2>
         <p>
           Backtest all 44 trials and one comes out on top. Before believing it,
           ask the question this whole app exists to ask: <strong>would a search
