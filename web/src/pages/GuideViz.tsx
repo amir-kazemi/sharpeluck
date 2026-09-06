@@ -207,8 +207,11 @@ export function SearchBreakdown() {
 /** What a wider search costs you: the Sharpe the best of N trials reaches with
  *  no real edge at all. Same expression as the audit layer's SR0, in units of
  *  trial-Sharpe sigma so it needs no data to be read. */
+// The axis is trials, so every marker is labelled in trials. 11 is what the
+// same 11 signals would cost with a single sign and a single rebalance
+// frequency -- not a count of signals, which is a different unit.
 const MARKS = [
-  { n: 11, label: "11 signals" },
+  { n: 11, label: "11 trials" },
   { n: 44, label: "44 trials" },
   { n: 500, label: "500 trials" },
 ];
