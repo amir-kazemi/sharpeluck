@@ -1,5 +1,6 @@
 import {
-  backtestToy, COINS, computeToy, pct, PRICES, returns, signed, WALKTHROUGH_DAYS,
+  backtestToy, COINS, computeToy, EULER_GAMMA, expectedBestOfN, invNorm, pct,
+  PRICES, returns, signed, WALKTHROUGH_DAYS,
 } from "./toyCalc";
 import {
   BellCurve, CategoryBars, DecliningLine, DivergingBars, NumberLine, PnlBars,
@@ -44,6 +45,15 @@ export default function Guide() {
     PRICES[c][dayFive - 1] / PRICES[c][dayFive - 2] - 1;
   // Built from the computed results, so the formula can never disagree with
   // the chart above it.
+  // The pieces of the best-of-N expression, computed rather than transcribed.
+  const N = 44;
+  const p1 = 1 - 1 / N;
+  const p2 = 1 - 1 / (N * Math.E);
+  const z1 = invNorm(p1);
+  const z2 = invNorm(p2);
+  const bestOf44 = expectedBestOfN(N);
+  const exampleSpread = 0.5;   // an illustrative dispersion of trial Sharpes
+
   const pnlSum = b.days
     .map((d) => `${d.pnl >= 0 ? "+" : "-"}${Math.abs(d.pnl * 100).toFixed(3)}`)
     .join("");
@@ -294,21 +304,52 @@ export default function Guide() {
         <Figure caption="The expected best-of-N Sharpe when nothing has any edge, in units of how much trial Sharpes vary. Same expression the audit layer uses as its noise benchmark — see the Method panel.">
           <SearchCostCurve />
         </Figure>
+        <h3>Where {bestOf44.toFixed(2)} comes from</h3>
         <p>
-          <strong>What gets compared against that line?</strong> The Sharpe ratio
-          from section 4 — the {b.sharpe.toFixed(2)} this toy rule scored. That is
-          the number on trial. And <strong>σ is simply how spread out the 44
-          rules' scores are from one another</strong>:
-          if they scatter by 0.5 Sharpe, then 2.23σ means 2.23 × 0.5 ≈{" "}
-          <strong>1.1 Sharpe</strong>. So the winner has to clear roughly 1.1
-          before it counts as anything but luck — and clearing 0 counts for
-          nothing at all.
+          Draw N numbers from a bell curve and the largest tends to land near
+          the <strong>(1 − 1/N)</strong> percentile — with {N} draws, roughly one
+          in {N} of the curve should sit above it. Write Φ<sup>−1</sup> for the
+          function turning a percentile into a score, and γ for the
+          Euler–Mascheroni constant ({EULER_GAMMA.toFixed(4)}); the second term
+          corrects for the fact that the <em>average</em> maximum sits a little
+          past that percentile:
+        </p>
+        <Tex tex={String.raw`\mathbb{E}\!\left[\max_{N}\right]
+          = (1-\gamma)\,\Phi^{-1}\!\left(1-\frac{1}{N}\right)
+          + \gamma\,\Phi^{-1}\!\left(1-\frac{1}{N e}\right)`} />
+        <p>At N = {N}:</p>
+        <Tex tex={String.raw`\begin{aligned}
+          \mathbb{E}\!\left[\max_{${N}}\right]
+          &= ${(1 - EULER_GAMMA).toFixed(4)}\cdot\Phi^{-1}(${p1.toFixed(4)})
+           + ${EULER_GAMMA.toFixed(4)}\cdot\Phi^{-1}(${p2.toFixed(4)}) \\[2pt]
+          &= ${(1 - EULER_GAMMA).toFixed(4)}\cdot ${z1.toFixed(4)}
+           + ${EULER_GAMMA.toFixed(4)}\cdot ${z2.toFixed(4)} \\[2pt]
+          &= ${((1 - EULER_GAMMA) * z1).toFixed(4)} + ${(EULER_GAMMA * z2).toFixed(4)}
+           \;=\; ${bestOf44.toFixed(4)}\,\sigma
+          \end{aligned}`} />
+
+        <h3>Reading σ as a Sharpe</h3>
+        <p>
+          σ is <strong>how spread out the {N} rules' scores are from one
+          another</strong>. Multiply to convert — if those scores scatter by{" "}
+          {exampleSpread} Sharpe, say:
+        </p>
+        <Tex tex={String.raw`\text{bar to clear}
+          \;=\; \mathbb{E}\!\left[\max_{${N}}\right]\times s
+          \;=\; ${bestOf44.toFixed(2)}\times ${exampleSpread}
+          \;\approx\; ${(bestOf44 * exampleSpread).toFixed(1)}`} />
+        <p className="sub">
+          So the number on trial — the {b.sharpe.toFixed(2)} from section 4 —
+          would need to clear about {(bestOf44 * exampleSpread).toFixed(1)},
+          not 0. Beating zero counts for nothing.
         </p>
         <Callout>
-          Going from 11 trials to 44 raises that bar from 1.62σ to 2.23σ; push
-          to 500 and it is 3.05σ. You can always find a better-looking strategy
-          by searching harder — but the bar rises with you, which is exactly why
-          a good-looking Sharpe on its own is not evidence of anything.
+          The bar rises with the size of the search:{" "}
+          {expectedBestOfN(11).toFixed(2)}σ at 11 trials,{" "}
+          {bestOf44.toFixed(2)}σ at {N}, {expectedBestOfN(500).toFixed(2)}σ at 500.
+          You can always find a better-looking strategy by searching harder — but
+          you raise the bar by doing so, which is why a good-looking Sharpe on its
+          own is not evidence of anything.
         </Callout>
       </section>
 

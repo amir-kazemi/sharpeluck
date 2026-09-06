@@ -97,7 +97,7 @@ export const signed = (v: number, d = 2) => (v >= 0 ? "+" : "") + v.toFixed(d);
  * independent trials that all have zero real edge.
  * ------------------------------------------------------------------------ */
 
-const EULER_GAMMA = 0.5772156649015329;
+export const EULER_GAMMA = 0.5772156649015329;
 
 /** Acklam's rational approximation to the inverse normal CDF (~1e-9). */
 export function invNorm(p: number): number {
