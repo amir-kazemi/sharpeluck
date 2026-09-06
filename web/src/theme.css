@@ -229,3 +229,6 @@ html { scroll-behavior: smooth; }
   background: var(--wash); border-radius: 0 6px 6px 0;
   font-size: 14px; line-height: 1.65;
 }
+
+.guide-list { margin: 0; padding-left: 20px; color: var(--text-secondary); }
+.guide-list li { margin: 6px 0; line-height: 1.7; }

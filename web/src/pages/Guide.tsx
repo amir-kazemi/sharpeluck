@@ -4,7 +4,7 @@ import {
 } from "./toyCalc";
 import {
   BellCurve, CategoryBars, DecliningLine, DivergingBars, NumberLine, PnlBars,
-  SearchBreakdown, SearchCostCurve, Sparkline, SplitHalf,
+  MaxDistribution, SearchBreakdown, SearchCostCurve, Sparkline, SplitHalf,
 } from "./GuideViz";
 import { Tex } from "../components/Tex";
 
@@ -331,18 +331,45 @@ export default function Guide() {
         </p>
 
         <p>
-          <strong>But it is slightly too low for the average winner.</strong> The
-          maximum does not always stop near {z1.toFixed(0)}σ — it clears that
-          level about {(pExceeds * 100).toFixed(0)}% of the time, sometimes
-          reaching 2.5σ, 3σ or more, and those larger outcomes pull its average
-          upward. For {N} independent normal draws the expected maximum is
+          <strong>But 2σ is too low, and here is why.</strong> Run the whole
+          experiment once — {N} useless rules, each scored on noisy data — and
+          you get one winner with one score. Run it again with fresh noise and
+          the winner scores something different. Repeat it thousands of times
+          and those winning scores form a distribution of their own:
         </p>
-        <Tex tex={String.raw`\mathbb{E}\!\left[\max_{${N}}\right] = ${bestOf44.toFixed(2)}\,\sigma`} />
+        <Figure caption={
+          `The exact density of the best of ${N} scores when none of the rules has any `
+          + `edge. Shaded: the ${(pExceeds * 100).toFixed(0)}% of repeats in which the `
+          + `winner beats the first guess.`
+        }>
+          <MaxDistribution n={N} guess={z1} mean={bestOf44} />
+        </Figure>
+        <p>Two things to read off it:</p>
+        <ul className="guide-list">
+          <li>
+            The winner beats {z1.toFixed(2)}σ about{" "}
+            {(pExceeds * 100).toFixed(0)}% of the time. So {z1.toFixed(0)}σ is
+            not where the winner usually lands — it is a level the winner
+            usually <em>exceeds</em>.
+          </li>
+          <li>
+            The curve trails off slowly to the right. Most winners land somewhere
+            around 2σ, but now and then one reaches 3σ or beyond, and those rare
+            large outcomes drag the average upward.
+          </li>
+        </ul>
         <p>
-          <strong>That is the number that matters here</strong> — the value
-          marked on the chart above. It comes from an expression that blends two
-          quantiles rather than taking the single one from the first guess (γ is
-          the Euler–Mascheroni constant, {EULER_GAMMA.toFixed(4)}):
+          Average across all those repeats and you get{" "}
+          <strong>{bestOf44.toFixed(2)}σ</strong> — the value marked on the
+          chart above. That is the number we want, because the question is what
+          a search of this size <em>typically</em> hands you, not its best case
+          or its worst.
+        </p>
+        <p>
+          Computing that average directly means blending two quantiles rather
+          than reading off one. γ is the Euler–Mascheroni constant,{" "}
+          {EULER_GAMMA.toFixed(4)}, and Φ<sup>−1</sup> is the reverse lookup
+          from above:
         </p>
         <Tex tex={String.raw`\begin{aligned}
           \mathbb{E}\!\left[\max_{N}\right]
@@ -353,8 +380,11 @@ export default function Guide() {
            \;=\; ${bestOf44.toFixed(4)}\,\sigma
           \end{aligned}`} />
         <p className="sub">
-          where Φ<sup>−1</sup> is the reverse lookup used above: percentile in,
-          position on the curve out.
+          It is an approximation, and worth knowing which way it errs: the exact
+          average of the curve above is 2.199, so at N = {N} the expression runs
+          about 0.03 high and converges as N grows. It therefore sets the bar
+          slightly too high rather than too low, which is the safe direction for
+          a test meant to reject things.
         </p>
 
         <h3>Now translate it into Sharpe units</h3>
