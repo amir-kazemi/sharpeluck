@@ -125,6 +125,16 @@ export function invNorm(p: number): number {
          (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
 }
 
+/** Standard normal CDF (Abramowitz & Stegun 7.1.26, ~1e-7). */
+export function normCdf(x: number): number {
+  const s = Math.sign(x);
+  const z = Math.abs(x) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * z);
+  const y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t
+    - 0.284496736) * t + 0.254829592) * t * Math.exp(-z * z);
+  return 0.5 * (1 + s * y);
+}
+
 /** Expected best-of-N Sharpe under the null, in units of trial-Sharpe sigma. */
 export function expectedBestOfN(n: number): number {
   if (n < 2) return 0;

@@ -1,6 +1,6 @@
 import {
-  backtestToy, COINS, computeToy, EULER_GAMMA, expectedBestOfN, invNorm, pct,
-  PRICES, returns, signed, WALKTHROUGH_DAYS,
+  backtestToy, COINS, computeToy, EULER_GAMMA, expectedBestOfN, invNorm, normCdf,
+  pct, PRICES, returns, signed, WALKTHROUGH_DAYS,
 } from "./toyCalc";
 import {
   BellCurve, CategoryBars, DecliningLine, DivergingBars, NumberLine, PnlBars,
@@ -53,6 +53,7 @@ export default function Guide() {
   const z2 = invNorm(p2);
   const bestOf44 = expectedBestOfN(N);
   const exampleSpread = 0.5;   // an illustrative dispersion of trial Sharpes
+  const pExceeds = 1 - Math.pow(normCdf(z1), N);   // how often the max clears z1
 
   const pnlSum = b.days
     .map((d) => `${d.pnl >= 0 ? "+" : "-"}${Math.abs(d.pnl * 100).toFixed(3)}`)
@@ -306,18 +307,27 @@ export default function Guide() {
         </Figure>
         <h3>Where {bestOf44.toFixed(2)} comes from</h3>
         <p>
-          Draw N numbers from a bell curve and the largest tends to land near
-          the <strong>(1 − 1/N)</strong> percentile — with {N} draws, roughly one
-          in {N} of the curve should sit above it. Write Φ<sup>−1</sup> for the
-          function turning a percentile into a score, and γ for the
-          Euler–Mascheroni constant ({EULER_GAMMA.toFixed(4)}); the second term
-          corrects for the fact that the <em>average</em> maximum sits a little
-          past that percentile:
+          <strong>First, a rough estimate.</strong> Draw N numbers from a bell
+          curve and the largest usually lands near the <strong>(1 − 1/N)</strong>{" "}
+          percentile — with {N} draws, about one part in {N} of the curve should
+          sit above it. That percentile is {p1.toFixed(4)}, and the score there
+          is <strong>{z1.toFixed(2)}</strong>.
+        </p>
+        <p>
+          <strong>But {z1.toFixed(2)} is not the answer.</strong> It is a level
+          the largest of {N} draws actually clears about{" "}
+          {(pExceeds * 100).toFixed(0)}% of the time. The distribution of a
+          maximum leans to the right — it seldom falls far below that level and
+          occasionally lands well above — so its <em>average</em> sits higher
+          still, at <strong>{bestOf44.toFixed(2)}</strong>. The expression below
+          blends two percentiles to land on that average rather than the rough
+          estimate. Φ<sup>−1</sup> turns a percentile into a score, and γ is the
+          Euler–Mascheroni constant ({EULER_GAMMA.toFixed(4)}):
         </p>
         <Tex tex={String.raw`\mathbb{E}\!\left[\max_{N}\right]
           = (1-\gamma)\,\Phi^{-1}\!\left(1-\frac{1}{N}\right)
           + \gamma\,\Phi^{-1}\!\left(1-\frac{1}{N e}\right)`} />
-        <p>At N = {N}:</p>
+        <p>Substituting N = {N} gives the average, not the estimate:</p>
         <Tex tex={String.raw`\begin{aligned}
           \mathbb{E}\!\left[\max_{${N}}\right]
           &= ${(1 - EULER_GAMMA).toFixed(4)}\cdot\Phi^{-1}(${p1.toFixed(4)})
