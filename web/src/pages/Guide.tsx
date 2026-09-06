@@ -311,8 +311,18 @@ export default function Guide() {
           Draw N numbers from a bell curve and the largest usually lands near
           the <strong>(1 − 1/N)</strong> percentile: with {N} draws, about one
           part in {N} of the curve sits above it. That percentile is{" "}
-          {p1.toFixed(4)}, and the score sitting at it is {z1.toFixed(2)}.
+          {p1.toFixed(4)}.
         </p>
+        <p>
+          Now the reverse question: <em>which point on the bell curve has{" "}
+          {(p1 * 100).toFixed(2)}% of it below?</em> That is the familiar
+          two-standard-deviations mark — {(normCdf(2) * 100).toFixed(2)}% of a
+          bell curve lies below 2 — so the answer is {z1.toFixed(2)}. Write
+          Φ<sup>−1</sup> for that reverse lookup, percentile in and position on
+          the curve out:
+        </p>
+        <Tex tex={String.raw`\Phi^{-1}\!\left(1-\frac{1}{${N}}\right)
+          = \Phi^{-1}\!\left(${p1.toFixed(4)}\right) = ${z1.toFixed(2)}`} />
         <p>
           <strong>The answer is {bestOf44.toFixed(2)}, not {z1.toFixed(2)}.</strong>{" "}
           A maximum clears {z1.toFixed(2)} about {(pExceeds * 100).toFixed(0)}% of
@@ -321,8 +331,8 @@ export default function Guide() {
           occasionally lands well above — so its <em>average</em> sits higher
           still. The expression below blends two percentiles to land on that
           average — <strong>{bestOf44.toFixed(2)}</strong>, the value marked on
-          the chart above — rather than on the first guess. Φ<sup>−1</sup> turns a percentile into a score, and γ is the
-          Euler–Mascheroni constant ({EULER_GAMMA.toFixed(4)}):
+          the chart above — rather than on the first guess. γ here is the
+          Euler–Mascheroni constant, {EULER_GAMMA.toFixed(4)}:
         </p>
         <Tex tex={String.raw`\mathbb{E}\!\left[\max_{N}\right]
           = (1-\gamma)\,\Phi^{-1}\!\left(1-\frac{1}{N}\right)
