@@ -54,25 +54,61 @@ export function CategoryBars(
 
 /** A single-hue number line: at this stage a value's sign means "more or less
  *  than average," not yet "long or short," so it deliberately does not use the
- *  long/short colours below. */
+ *  long/short colours below.
+ *
+ *  Labels are not evenly spread -- coins can cluster in value, as B/C/D do
+ *  here -- so a fixed label row collides. Greedily place each label (sorted
+ *  left to right) in the lowest tier that does not overlap what is already
+ *  there; a label pushed to a higher tier keeps a thin leader down to its dot.
+ */
+const FONT = 11;
+const CHAR_W = FONT * 0.62; // monospace, approx
+const TIER_H = 15;
+const DOT_Y = 30;
+
 export function NumberLine({ values }: { values: { coin: string; v: number }[] }) {
   const w = 460, pad = 34;
   const vs = values.map((x) => x.v);
   const [lo, hi] = padded(Math.min(0, ...vs), Math.max(0, ...vs), 0.3);
   const x = linear(lo, hi, pad, w - pad);
+
+  const items = values
+    .map(({ coin, v }) => {
+      const label = `${coin} ${v.toFixed(2)}`;
+      return { coin, v, label, px: x(v), halfW: (label.length * CHAR_W) / 2, tier: 0 };
+    })
+    .sort((a, b) => a.px - b.px);
+
+  const lastRight: number[] = [];
+  for (const it of items) {
+    let tier = 0;
+    while (lastRight[tier] !== undefined && it.px - it.halfW < lastRight[tier] + 3) tier++;
+    lastRight[tier] = it.px + it.halfW;
+    it.tier = tier;
+  }
+  const maxTier = Math.max(0, ...items.map((it) => it.tier));
+  const h = DOT_Y + 10 + maxTier * TIER_H;
+
   return (
-    <svg width="100%" viewBox={`0 0 ${w} 40`} preserveAspectRatio="xMinYMid meet">
-      <line x1={pad} x2={w - pad} y1={26} y2={26} stroke="var(--axis)" strokeWidth={1} />
-      <line x1={x(0)} x2={x(0)} y1={12} y2={26} stroke="var(--rule)" strokeWidth={1.5} />
-      {values.map(({ coin, v }) => (
-        <g key={coin}>
-          <circle cx={x(v)} cy={26} r={5} fill="var(--series-1)"
-                  stroke="var(--surface-1)" strokeWidth={2} />
-          <text x={x(v)} y={16} textAnchor="middle" fontSize={11.5} fill="var(--text-secondary)">
-            {coin} {v.toFixed(2)}
-          </text>
-        </g>
-      ))}
+    <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMinYMid meet">
+      <line x1={pad} x2={w - pad} y1={DOT_Y} y2={DOT_Y} stroke="var(--axis)" strokeWidth={1} />
+      <line x1={x(0)} x2={x(0)} y1={6} y2={DOT_Y} stroke="var(--rule)" strokeWidth={1.5} />
+      {items.map((it) => {
+        const labelY = DOT_Y - 10 - it.tier * TIER_H;
+        return (
+          <g key={it.coin}>
+            {it.tier > 0 && (
+              <line x1={it.px} x2={it.px} y1={labelY + 4} y2={DOT_Y - 6}
+                    stroke="var(--grid)" strokeWidth={1} />
+            )}
+            <circle cx={it.px} cy={DOT_Y} r={5} fill="var(--series-1)"
+                    stroke="var(--surface-1)" strokeWidth={2} />
+            <text x={it.px} y={labelY} textAnchor="middle" fontSize={FONT} fill="var(--text-secondary)">
+              {it.label}
+            </text>
+          </g>
+        );
+      })}
     </svg>
   );
 }
