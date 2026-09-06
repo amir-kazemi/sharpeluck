@@ -27,6 +27,9 @@ export function Sparkline({ prices, label }: { prices: number[]; label: string }
   );
 }
 
+/** Bars sized by magnitude. Only valid for quantities that cannot be negative
+ *  -- it uses the absolute value, so a signed series would render its losses
+ *  and gains identically. Use PnlBars for anything that can go below zero. */
 export function CategoryBars(
   { items, fmt }: { items: { label: string; value: number }[]; fmt?: (v: number) => string },
 ) {
@@ -168,6 +171,52 @@ export function DivergingBars({ items }: { items: { coin: string; weight: number
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** Daily results around zero. Direction carries the sign rather than colour:
+ *  a second hue here would clash with the long/short pair used for positions,
+ *  where blue and red already mean something else. */
+export function PnlBars(
+  { days, avg }: { days: { day: number; pnl: number }[]; avg: number },
+) {
+  const w = 460, mid = w / 2, pad = 52;
+  const max = Math.max(...days.map((d) => Math.abs(d.pnl)), 1e-9);
+  const scale = mid - pad;
+  const avgX = mid + (avg / max) * scale;
+  return (
+    <div style={{ display: "grid", gap: 6 }}>
+      {days.map(({ day, pnl }) => {
+        const px = (Math.abs(pnl) / max) * scale;
+        const up = pnl >= 0;
+        return (
+          <div key={day} className="row" style={{ gap: 10 }}>
+            <span className="sub" style={{ width: "2.6em" }}>day {day}</span>
+            <svg width="100%" viewBox={`0 0 ${w} 18`} preserveAspectRatio="xMinYMid meet"
+                 style={{ flex: 1 }}>
+              <line x1={mid} x2={mid} y1={0} y2={18} stroke="var(--axis)" strokeWidth={1} />
+              <rect x={up ? mid : mid - px} y={2} width={px} height={14} rx={2}
+                    fill="var(--series-1)" />
+            </svg>
+            <span className="sub" style={{ width: "5em", textAlign: "right" }}>
+              {pnl >= 0 ? "+" : ""}{(pnl * 100).toFixed(2)}%
+            </span>
+          </div>
+        );
+      })}
+      <div className="row" style={{ gap: 10, marginTop: 2 }}>
+        <span className="sub" style={{ width: "2.6em", color: "var(--muted)" }}>avg</span>
+        <svg width="100%" viewBox={`0 0 ${w} 20`} preserveAspectRatio="xMinYMid meet"
+             style={{ flex: 1 }}>
+          <line x1={mid} x2={mid} y1={0} y2={12} stroke="var(--axis)" strokeWidth={1} />
+          <line x1={avgX} x2={avgX} y1={0} y2={12} stroke="var(--rule)" strokeWidth={2} />
+          <text x={mid} y={20} textAnchor="middle" fontSize={9.5} fill="var(--muted)">0</text>
+        </svg>
+        <span className="sub" style={{ width: "5em", textAlign: "right" }}>
+          {avg >= 0 ? "+" : ""}{(avg * 100).toFixed(3)}%
+        </span>
+      </div>
     </div>
   );
 }

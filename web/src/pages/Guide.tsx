@@ -2,8 +2,8 @@ import {
   backtestToy, COINS, computeToy, pct, PRICES, returns, signed, WALKTHROUGH_DAYS,
 } from "./toyCalc";
 import {
-  BellCurve, CategoryBars, DecliningLine, DivergingBars, NumberLine, SearchBreakdown,
-  SearchCostCurve, Sparkline, SplitHalf,
+  BellCurve, CategoryBars, DecliningLine, DivergingBars, NumberLine, PnlBars,
+  SearchBreakdown, SearchCostCurve, Sparkline, SplitHalf,
 } from "./GuideViz";
 
 function Toc() {
@@ -100,7 +100,8 @@ export default function Guide() {
               {COINS.map((c) => (
                 <tr key={c}>
                   <td>{c}</td>
-                  {returns(PRICES[c]).map((r, i) => <td key={i}>{pct(r)}</td>)}
+                  {returns(PRICES[c].slice(0, WALKTHROUGH_DAYS))
+                    .map((r, i) => <td key={i}>{pct(r)}</td>)}
                 </tr>
               ))}
             </tbody>
@@ -227,11 +228,11 @@ export default function Guide() {
           re-holding. Over the toy's ten days that gives {b.days.length} daily results:
         </p>
         <Figure caption={
-          `Average ${pct(b.avg, 3)} per day, varying by ${pct(b.sd, 3)}. `
-          + `Score = average ÷ variation = ${b.sharpe.toFixed(3)}.`
+          `Gains right of the line, losses left. They very nearly cancel: the average `
+          + `is ${pct(b.avg, 3)} a day against day-to-day swings of ${pct(b.sd, 3)}, `
+          + `so the score is ${b.sharpe.toFixed(3)}.`
         }>
-          <CategoryBars fmt={(v) => pct(v, 2)}
-                        items={b.days.map((d) => ({ label: `d${d.day}`, value: d.pnl }))} />
+          <PnlBars days={b.days} avg={b.avg} />
         </Figure>
         <p>
           That ratio — <strong>average return divided by how much it varies</strong> —

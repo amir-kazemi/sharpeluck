@@ -18,6 +18,7 @@ await build({
       import { renderToStaticMarkup } from "react-dom/server";
       import { createElement as h } from "react";
       import { NumberLine, SearchCostCurve } from "../src/pages/GuideViz.tsx";
+      import Guide from "../src/pages/Guide.tsx";
       import { computeToy, COINS } from "../src/pages/toyCalc.ts";
       const t = computeToy();
       export const cases = {
@@ -37,6 +38,7 @@ await build({
       export const renderStatic = {
         "search cost curve": () => renderToStaticMarkup(h(SearchCostCurve)),
       };
+      export const renderGuide = () => renderToStaticMarkup(h(Guide));
     `,
     resolveDir: "scripts",
     loader: "tsx",
@@ -45,7 +47,8 @@ await build({
   external: ["react", "react-dom", "react-dom/server"], logLevel: "error",
 });
 
-const { cases, render, renderStatic } = await import(pathToFileURL(OUT).href + `?t=${Date.now()}`);
+const { cases, render, renderStatic, renderGuide } =
+  await import(pathToFileURL(OUT).href + `?t=${Date.now()}`);
 
 const num = (s, k) => { const m = s.match(new RegExp(`${k}="([-\\d.]+)"`)); return m ? +m[1] : null; };
 const M = { ASCENT: 11 * 0.78, DESCENT: 11 * 0.22, CHAR_W: 11 * 0.62 };
@@ -113,6 +116,28 @@ for (const [name, svg] of svgs) {
 
 
   if (!failures) console.log(`  ✓ ${name.padEnd(24)} ${texts.length} labels, ${circles.length} dots, viewBox ${vbW}×${Math.round(vbH)}`);
+}
+
+// Tables: every body row must have as many cells as the header has columns.
+// A data column with no header slipped through once, because SVG checks cannot
+// see an HTML table.
+{
+  const guide = renderGuide();
+  const tables = [...guide.matchAll(/<table>(.*?)<\/table>/gs)].map(([, t]) => t);
+  if (!tables.length) fail("guide tables", "no tables rendered at all");
+  tables.forEach((t, i) => {
+    // <th[^>]*> would also match <thead>, inflating every count by one.
+    const headers = (t.match(/<th(?:\s[^>]*)?>/g) ?? []).length;
+    const rows = [...t.matchAll(/<tr>((?:(?!<\/tr>).)*)<\/tr>/gs)]
+      .map(([, r]) => (r.match(/<td[^>]*>/g) ?? []).length)
+      .filter((n) => n > 0);
+    for (const cells of rows) {
+      if (cells !== headers) {
+        fail("guide tables", `table ${i + 1}: header has ${headers} columns, a row has ${cells} cells`);
+      }
+    }
+    if (!failures) console.log(`  ✓ table ${i + 1} ${String(headers).padStart(2)} columns × ${rows.length} rows`);
+  });
 }
 
 try { unlinkSync(OUT); } catch {}
