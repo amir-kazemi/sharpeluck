@@ -360,8 +360,9 @@ export default function Guide() {
           So the winner clears the floor about{" "}
           {((1 - Math.pow(1 - 1 / N, N)) * 100).toFixed(0)}% of the time — and
           that is not a quirk of {N}. Since (1 − 1/N)<sup>N</sup> → 1/e, the
-          (1 − 1/N) quantile is beaten roughly{" "}
-          {((1 - 1 / Math.E) * 100).toFixed(0)}% of the time whatever N is.
+          (1 − 1/N) quantile is beaten with probability approaching{" "}
+          1 − 1/e ≈ {((1 - 1 / Math.E) * 100).toFixed(0)}%, largely independent
+          of N once N is moderately large.
         </p>
         <p>
           Second, it sometimes clears the floor by a wide margin — the winner
