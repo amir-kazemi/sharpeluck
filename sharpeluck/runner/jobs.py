@@ -39,8 +39,17 @@ def launch(s: LocalStore, run_id: str) -> dict:
     execution = {"backend": mode, "host": socket.gethostname()}
     if mode == "slurm":
         custom = os.environ.get("SHARPELUCK_SUBMIT")
+        # No batch script ships with the repo: a real one names one cluster's
+        # account and partition, which is not a portable thing to publish.
+        default = REPO_ROOT / "slurm/dispatch.sbatch"
+        if not custom and not default.exists():
+            raise ValueError(
+                "No batch script. Write one that runs "
+                '`python -m sharpeluck.runner.dispatch "$RUN_ID"` and point the '
+                'runner at it with SHARPELUCK_SUBMIT="sbatch /path/to/your.sbatch", '
+                "or set SHARPELUCK_BACKEND=local to run on the API host.")
         cmd = shlex.split(custom.format(run_id=run_id)) if custom else [
-            "sbatch", str(REPO_ROOT / "slurm/dispatch.sbatch")]
+            "sbatch", str(default)]
         if not cmd or Path(cmd[0]).name != "sbatch":
             raise ValueError("SHARPELUCK_SUBMIT must invoke sbatch")
         # CLI options override script defaults; all output belongs to this run.

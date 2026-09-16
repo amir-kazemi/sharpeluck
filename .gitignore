@@ -10,7 +10,8 @@ node_modules/
 dist/
 .env
 node_modules/.cache
-slurm/logs/*.out
+# Batch scripts name a specific cluster's account and partition; they stay local.
+slurm/
 
 # ...except the handful of served artefacts the deployed image ships with.
 !results/

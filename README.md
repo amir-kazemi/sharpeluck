@@ -260,10 +260,9 @@ SHARPELUCK_BACKEND=slurm \
   uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-**Run audit** saves the settings and submits your batch script: account
-and partition `your-account`, 8 hours, 4 CPUs, 64 GB RAM, and one Quadro RTX 6000
-GPU as requested for this allocation. The calculations currently use only the
-CPUs. Data preparation, all trials, and the final audit run on the compute node.
+**Run audit** saves the settings and submits a batch job — 8 hours, 4 CPUs,
+64 GB RAM in the configuration this was developed against. Data preparation,
+all trials, and the final audit run on the compute node.
 Two trials run concurrently and share the prepared panel to limit memory use.
 
 The interface shows **Queued → Data → Trials → Audit**, along with the Slurm
@@ -273,7 +272,12 @@ launcher metadata in `execution.json`; submission does not overwrite progress.
 
 Use `SHARPELUCK_BACKEND=local` only when you intend to execute on the API host,
 such as with small test data. On machines without Slurm, local is the default.
-An existing `SHARPELUCK_SUBMIT="sbatch ..."` override is still supported.
+
+A batch script is not shipped, because any real one names a particular
+cluster's account and partition. Write your own and point the runner at it
+with `SHARPELUCK_SUBMIT="sbatch /path/to/your.sbatch"`; it is given `RUN_ID`
+and `SHARPELUCK_RUNS_ROOT` in the environment and needs only to run
+`python -m sharpeluck.runner.dispatch "$RUN_ID"`.
 
 **Terminal 2 — the UI, on port 5173**
 
