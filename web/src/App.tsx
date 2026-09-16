@@ -147,6 +147,10 @@ export default function App() {
     },
   });
 
+  // A server that demands a write token is a server whose compute is not on
+  // offer to whoever is reading. Unlocks as soon as a token is supplied.
+  const writeLocked = !!health.data?.write_token_required && !token;
+
   const busy = audit.isFetching || trials.isFetching || cloud.isFetching || equity.isFetching;
   const active = run?.state === "queued" || run?.state === "running";
   const error = runs.error ?? health.error ?? remove.error ?? runDetails.error ?? audit.error
@@ -208,14 +212,17 @@ export default function App() {
             show all ({(runs.data ?? []).length - visible.length} hidden)
           </span>
         </label>
-        <button disabled={!id || active || remove.isPending}
+        <button disabled={writeLocked || !id || active || remove.isPending}
                 onClick={() => {
                   if (id && confirm(`Delete run ${id}? This cannot be undone.`)) {
                     remove.mutate(id);
                   }
                 }}
                 style={{ padding: "3px 9px", fontSize: 12 }}
-                title={active ? "Wait for the run to finish before deleting it" : "Delete this run’s results; keep the source market data"}>
+                title={writeLocked
+                  ? "Deleting is disabled here; this deployment serves finished results only"
+                  : active ? "Wait for the run to finish before deleting it"
+                  : "Delete this run’s results; keep the source market data"}>
           {remove.isPending ? "deleting…" : "delete run"}
         </button>
         {health.data?.write_token_required && <label className="row" style={{ gap: 6 }}
@@ -348,7 +355,7 @@ export default function App() {
             requestAnimationFrame(() => {
               document.getElementById("run-progress")?.scrollIntoView({ block: "start" });
             });
-          }} token={token} />
+          }} token={token} locked={writeLocked} />
         </div>
         <p className="note">
           <a href="#guide/four-tests">Methodology — how the audit is calculated ↗</a>

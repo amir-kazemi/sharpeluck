@@ -16,7 +16,9 @@ const DEFAULT_GRIDS = [
  *  spent -- and the sign of each signal is expanded automatically, which is why
  *  the count is double what the expressions look like. */
 export function SubmitPanel(
-  { onSubmitted, token }: { onSubmitted: (id: string) => void; token: string },
+  { onSubmitted, token, locked }: {
+    onSubmitted: (id: string) => void; token: string; locked: boolean;
+  },
 ) {
   const qc = useQueryClient();
   // Guided by default; the text mode stays for anyone who prefers the syntax,
@@ -156,8 +158,9 @@ export function SubmitPanel(
 
       <div className="row" style={{ marginTop: 14, gap: 14 }}>
         <button onClick={() => submit.mutate()}
-                disabled={submit.isPending || !preview.data}
-                style={{ fontWeight: 600 }}>
+                disabled={locked || submit.isPending || !preview.data}
+                style={{ fontWeight: 600 }}
+                title={locked ? "This deployment serves finished results only" : undefined}>
           {submit.isPending ? "Submitting…" : "Run audit"}
         </button>
         <span className="sub">
@@ -169,6 +172,15 @@ export function SubmitPanel(
             : preview.isFetching ? "counting trials…" : "—"}
         </span>
       </div>
+
+      {locked && (
+        <p className="sub" style={{ marginTop: 10, maxWidth: "58ch" }}>
+          Running an audit is disabled here. Preparing the panel holds about
+          16&nbsp;GB of memory for several minutes, which this server does not
+          have — it serves finished results only. Every run listed above was
+          computed on a compute cluster and can be reproduced from its spec.
+        </p>
+      )}
 
       {err && (
         <p className="sub" style={{ color: "var(--critical)", marginTop: 10, whiteSpace: "pre-wrap" }}>
