@@ -103,15 +103,15 @@ def main() -> int:
     args = ap.parse_args()
 
     # Null runs live in their own store so they never appear in the real run list.
-    from alpha_audit.config import GOLD
-    os.environ.setdefault("ALPHA_AUDIT_RUNS_ROOT", str(GOLD / "null_runs"))
+    from sharpeluck.config import GOLD
+    os.environ.setdefault("SHARPELUCK_RUNS_ROOT", str(GOLD / "null_runs"))
 
-    from alpha_audit.ingest.silver import load_panel
-    from alpha_audit.research.signals import prepare_panel
-    from alpha_audit.research.universe import UniverseRules, build_universe
-    from alpha_audit.runner.dispatch import create, execute
-    from alpha_audit.runner.spec import RunSpec
-    from alpha_audit.runner.store import LocalStore
+    from sharpeluck.ingest.silver import load_panel
+    from sharpeluck.research.signals import prepare_panel
+    from sharpeluck.research.universe import UniverseRules, build_universe
+    from sharpeluck.runner.dispatch import create, execute
+    from sharpeluck.runner.spec import RunSpec
+    from sharpeluck.runner.store import LocalStore
     from scripts.run import DEFAULT_GRIDS
 
     real = load_panel()

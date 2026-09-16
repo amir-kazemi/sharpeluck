@@ -3,7 +3,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from alpha_audit.research import dsl
+from sharpeluck.research import dsl
 from tests.synth import prepared
 
 

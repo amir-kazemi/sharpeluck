@@ -22,7 +22,7 @@ from ..config import BRONZE
 BASE = "https://data.binance.vision"
 LISTING = "https://s3-ap-northeast-1.amazonaws.com/data.binance.vision"
 _TIMEOUT = 120
-_UA = "alpha-audit/0.5 (research backfill)"
+_UA = "sharpeluck/0.5 (research backfill)"
 
 # A CDN under a many-threaded backfill drops connections. These are the ways it
 # does so, and none of them mean the file is absent.

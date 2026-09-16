@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
 import { linear, padded } from "../charts/primitives";
-import { expectedBestOfN } from "./toyCalc";
+import { expectedBestOfN, GROSS_USD, usd } from "./toyCalc";
 
 /** Small illustrative diagrams for the walkthrough. Unlike the app's data
  *  charts these have no hover layer: every value that matters is already a
@@ -29,7 +30,7 @@ export function Sparkline({ prices, label }: { prices: number[]; label: string }
 
 /** Bars sized by magnitude. Only valid for quantities that cannot be negative
  *  -- it uses the absolute value, so a signed series would render its losses
- *  and gains identically. Use PnlBars for anything that can go below zero. */
+ *  and gains identically. Use SharpeScale for anything that can go below zero. */
 export function CategoryBars(
   { items, fmt }: { items: { label: string; value: number }[]; fmt?: (v: number) => string },
 ) {
@@ -171,52 +172,6 @@ export function DivergingBars({ items }: { items: { coin: string; weight: number
           </div>
         );
       })}
-    </div>
-  );
-}
-
-/** Daily results around zero. Direction carries the sign rather than colour:
- *  a second hue here would clash with the long/short pair used for positions,
- *  where blue and red already mean something else. */
-export function PnlBars(
-  { days, avg }: { days: { day: number; pnl: number }[]; avg: number },
-) {
-  const w = 460, mid = w / 2, pad = 52;
-  const max = Math.max(...days.map((d) => Math.abs(d.pnl)), 1e-9);
-  const scale = mid - pad;
-  const avgX = mid + (avg / max) * scale;
-  return (
-    <div style={{ display: "grid", gap: 6 }}>
-      {days.map(({ day, pnl }) => {
-        const px = (Math.abs(pnl) / max) * scale;
-        const up = pnl >= 0;
-        return (
-          <div key={day} className="row" style={{ gap: 10 }}>
-            <span className="sub" style={{ width: "2.6em" }}>day {day}</span>
-            <svg width="100%" viewBox={`0 0 ${w} 18`} preserveAspectRatio="xMinYMid meet"
-                 style={{ flex: 1 }}>
-              <line x1={mid} x2={mid} y1={0} y2={18} stroke="var(--axis)" strokeWidth={1} />
-              <rect x={up ? mid : mid - px} y={2} width={px} height={14} rx={2}
-                    fill="var(--series-1)" />
-            </svg>
-            <span className="sub" style={{ width: "5em", textAlign: "right" }}>
-              {pnl >= 0 ? "+" : ""}{(pnl * 100).toFixed(2)}%
-            </span>
-          </div>
-        );
-      })}
-      <div className="row" style={{ gap: 10, marginTop: 2 }}>
-        <span className="sub" style={{ width: "2.6em", color: "var(--muted)" }}>avg</span>
-        <svg width="100%" viewBox={`0 0 ${w} 20`} preserveAspectRatio="xMinYMid meet"
-             style={{ flex: 1 }}>
-          <line x1={mid} x2={mid} y1={0} y2={12} stroke="var(--axis)" strokeWidth={1} />
-          <line x1={avgX} x2={avgX} y1={0} y2={12} stroke="var(--rule)" strokeWidth={2} />
-          <text x={mid} y={20} textAnchor="middle" fontSize={9.5} fill="var(--muted)">0</text>
-        </svg>
-        <span className="sub" style={{ width: "5em", textAlign: "right" }}>
-          {avg >= 0 ? "+" : ""}{(avg * 100).toFixed(3)}%
-        </span>
-      </div>
     </div>
   );
 }
@@ -383,6 +338,199 @@ export function DecliningLine({ zeroAt, label }: { zeroAt: number; label: string
       <text x={zx} y={pad - 10} textAnchor="middle" fontSize={11} fill="var(--text-secondary)">{label}</text>
       <text x={pad} y={midY - 8} fontSize={10.5} fill="var(--muted)">edge</text>
       <text x={pad} y={midY + 18} fontSize={10.5} fill="var(--muted)">no edge</text>
+    </svg>
+  );
+}
+
+/* -------------------------------------------------------------------------
+ * The book, day by day.
+ *
+ * A ring rather than bars because the quantity being shown is a share of one
+ * fixed thing -- the gross book -- and because the rule's defining constraint
+ * is visible in the geometry: the shorts always sum to exactly half, so the
+ * boundary between the two sides is a vertical diameter that never moves.
+ * Only the slices inside it change hands. Four segments of a whole is the one
+ * case a ring is the right form; comparing close values in it would not be.
+ *
+ * Three discrete frames, cycled -- the animated version of three table rows.
+ * ---------------------------------------------------------------------- */
+
+const RING_R = 82, RING_IR = 42, RING_CX = 150, RING_CY = 104;
+const RING_TAU = Math.PI * 2;
+
+const ringPt = (a: number, r: number) =>
+  [RING_CX + r * Math.sin(a), RING_CY - r * Math.cos(a)] as const;
+
+/** Annular sector from a0 to a1; negative sweep runs anticlockwise. */
+function sector(a0: number, a1: number) {
+  const large = Math.abs(a1 - a0) > Math.PI ? 1 : 0;
+  const sweep = a1 > a0 ? 1 : 0;
+  const [x0, y0] = ringPt(a0, RING_R), [x1, y1] = ringPt(a1, RING_R);
+  const [x2, y2] = ringPt(a1, RING_IR), [x3, y3] = ringPt(a0, RING_IR);
+  return `M${x0},${y0} A${RING_R},${RING_R} 0 ${large} ${sweep} ${x1},${y1} `
+       + `L${x2},${y2} A${RING_IR},${RING_IR} 0 ${large} ${1 - sweep} ${x3},${y3} Z`;
+}
+
+type BookDay = {
+  day: number;
+  pnl: number;
+  cum: number;
+  weights: Record<string, number>;
+};
+
+export function BookRing({ coins, weights }: { coins: readonly string[]; weights: Record<string, number> }) {
+  // Longs sweep clockwise from twelve, shorts anticlockwise. Each side sums to
+  // a half turn on its own, so the two meet at six o'clock without being told.
+  let longA = 0, shortA = 0;
+  const slices = coins.map((c) => {
+    const w = weights[c];
+    const span = Math.abs(w) * RING_TAU;
+    const a0 = w >= 0 ? longA : shortA;
+    const a1 = w >= 0 ? (longA += span) : (shortA -= span);
+    return { coin: c, w, a0, a1, mid: (a0 + a1) / 2 };
+  });
+  return (
+    <svg viewBox="0 0 300 212" width="100%" style={{ maxWidth: 300 }} role="img"
+         aria-label="Share of the book held in each coin, long and short">
+      {slices.map(({ coin, w, a0, a1 }) => (
+        <path key={coin} d={sector(a0, a1)}
+              fill={w >= 0 ? "var(--pos)" : "var(--neg)"}
+              stroke="var(--surface-1)" strokeWidth={2} />
+      ))}
+      {slices.map(({ coin, w, mid }) => {
+        const [lx, ly] = ringPt(mid, RING_R + 17);
+        const side = Math.sin(mid);
+        const anchor = side > 0.12 ? "start" : side < -0.12 ? "end" : "middle";
+        return (
+          <text key={coin} x={lx} y={ly} textAnchor={anchor} dy="0.32em" fontSize={11.5}>
+            <tspan fill="var(--text-primary)" fontWeight={600}>{coin}</tspan>
+            <tspan fill="var(--text-secondary)"> {(Math.abs(w) * 100).toFixed(1)}%</tspan>
+          </text>
+        );
+      })}
+      <text x={RING_CX} y={RING_CY - 3} textAnchor="middle" fontSize={13} fontWeight={600}
+            fill="var(--text-primary)">{usd(GROSS_USD, 0)}</text>
+      <text x={RING_CX} y={RING_CY + 13} textAnchor="middle" fontSize={10.5} fill="var(--muted)">gross</text>
+    </svg>
+  );
+}
+
+export function BookWheel(
+  { days, coins, windowLabel }:
+  { days: BookDay[]; coins: readonly string[]; windowLabel: (day: number) => string },
+) {
+  const [i, setI] = useState(0);
+  // Auto-advance is the point -- it is the animation -- but a reader who wants
+  // to stop on a frame clicks one, and that must not be fought over.
+  const [playing, setPlaying] = useState(true);
+  useEffect(() => {
+    if (!playing || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const t = setInterval(() => setI((n) => (n + 1) % days.length), 2600);
+    return () => clearInterval(t);
+  }, [playing, days.length]);
+
+  const d = days[i];
+  const stat = (label: string, value: string, tone?: string) => (
+    <div>
+      <div className="tile-label">{label}</div>
+      <div className="tile-value" style={{ fontSize: 23, color: tone }}>{value}</div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <div className="row" style={{ gap: 6 }}>
+        {days.map((x, n) => (
+          <button key={x.day} aria-pressed={n === i}
+                  onClick={() => { setI(n); setPlaying(false); }}
+                  style={{ padding: "3px 9px", fontSize: 12 }}>
+            day {x.day}
+          </button>
+        ))}
+        {!playing && (
+          <button onClick={() => setPlaying(true)} style={{ padding: "3px 9px", fontSize: 12 }}>
+            play
+          </button>
+        )}
+      </div>
+      <div className="row" style={{ gap: 26, alignItems: "center" }}>
+        <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+          <BookRing coins={coins} weights={d.weights} />
+        </div>
+        <div style={{ display: "grid", gap: 14, flex: "1 1 170px", minWidth: 0 }}>
+          {stat("weighted from", `days ${windowLabel(d.day)}`)}
+          {stat("day's P&L", `${d.pnl >= 0 ? "+" : ""}${(d.pnl * 100).toFixed(2)}%`,
+                d.pnl >= 0 ? "var(--pos)" : "var(--neg)")}
+          {stat(`on ${usd(GROSS_USD, 0)}`, usd(d.pnl * GROSS_USD))}
+          {stat("running total", usd(d.cum * GROSS_USD))}
+        </div>
+      </div>
+      <div className="row" style={{ gap: 16 }}>
+        {[["long", "var(--pos)"], ["short", "var(--neg)"]].map(([label, color]) => (
+          <span key={label} className="row" style={{ gap: 6 }}>
+            <span className="dot" style={{ background: color }} />
+            <span className="sub">{label}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------
+ * What the Sharpe ratio actually is, drawn.
+ *
+ * Replaces a bar per day, which showed the three numbers again after the ring
+ * had already shown them. The ratio is a comparison between two lengths -- how
+ * far the average sits from zero, against how far the days scatter -- so the
+ * useful picture is those two lengths on one axis, where the reader can see
+ * one is a fraction of the other before meeting the formula.
+ * ---------------------------------------------------------------------- */
+
+export function SharpeScale(
+  { days, avg, sd }: { days: { day: number; pnl: number }[]; avg: number; sd: number },
+) {
+  const w = 460, h = 132, pad = 46;
+  const vals = days.map((d) => d.pnl);
+  const [lo, hi] = padded(Math.min(0, avg - sd, ...vals), Math.max(0, avg + sd, ...vals), 0.12);
+  const x = linear(lo, hi, pad, w - pad);
+  const fmt = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(2)}%`;
+
+  // The two lowest days sit a fifth of a percent apart; labelling both on one
+  // row would overlap them, so the row alternates by rank instead.
+  const ranked = [...days].sort((a, b) => a.pnl - b.pnl);
+  const above = (d: number) => ranked.findIndex((r) => r.day === d) % 2 === 1;
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width="100%" role="img"
+         aria-label="The three daily returns, their average, and their spread, on one axis">
+      <rect x={x(avg - sd)} y={40} width={Math.max(0, x(avg + sd) - x(avg - sd))} height={18}
+            fill="var(--wash)" />
+      <line x1={x(0)} x2={x(0)} y1={32} y2={66} stroke="var(--axis)" strokeWidth={1} />
+      <line x1={x(avg)} x2={x(avg)} y1={32} y2={66} stroke="var(--rule)" strokeWidth={2} />
+
+      {days.map(({ day, pnl }) => (
+        <circle key={day} cx={x(pnl)} cy={49} r={5} fill="var(--series-1)"
+                stroke="var(--surface-1)" strokeWidth={2} />
+      ))}
+      {days.map(({ day, pnl }) => (
+        <text key={day} x={x(pnl)} y={above(day) ? 30 : 80} textAnchor="middle"
+              fontSize={11} fill="var(--text-secondary)">
+          day {day} {fmt(pnl)}
+        </text>
+      ))}
+
+      <text x={x(0)} y={98} textAnchor="middle" fontSize={11} fill="var(--muted)">zero</text>
+
+      {/* The two lengths the ratio is made of. */}
+      <line x1={x(avg)} x2={x(avg + sd)} y1={112} y2={112} stroke="var(--axis)" strokeWidth={1} />
+      <line x1={x(avg)} x2={x(avg)} y1={108} y2={116} stroke="var(--axis)" strokeWidth={1} />
+      <line x1={x(avg + sd)} x2={x(avg + sd)} y1={108} y2={116} stroke="var(--axis)" strokeWidth={1} />
+      <text x={(x(avg) + x(avg + sd)) / 2} y={128} textAnchor="middle" fontSize={11}
+            fill="var(--text-secondary)">spread {(sd * 100).toFixed(2)}%</text>
+      <text x={x(avg)} y={14} textAnchor="middle" fontSize={11} fill="var(--text-primary)">
+        average {fmt(avg)}
+      </text>
     </svg>
   );
 }

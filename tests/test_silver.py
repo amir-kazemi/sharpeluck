@@ -6,7 +6,7 @@ import zipfile
 
 import polars as pl
 
-from alpha_audit.ingest.silver import _epoch_unit, read_kline_zip, to_hourly
+from sharpeluck.ingest.silver import _epoch_unit, read_kline_zip, to_hourly
 
 
 def _zip(tmp_path, body: str, name="k.csv"):

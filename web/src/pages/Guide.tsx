@@ -1,12 +1,19 @@
+import { useEffect } from "react";
 import {
-  backtestToy, COINS, computeToy, EULER_GAMMA, expectedBestOfN, invNorm, normCdf,
-  pct, PRICES, returns, signed, WALKTHROUGH_DAYS,
+  backtestToy, COINS, computeToy, EULER_GAMMA, exactBestOfN, expectedBestOfN,
+  invNorm, normCdf,
+  GROSS_USD, pct, PRICES, returns, signed, usd, WALKTHROUGH_DAYS,
 } from "./toyCalc";
 import {
-  BellCurve, CategoryBars, DecliningLine, DivergingBars, NumberLine, PnlBars,
-  SearchBreakdown, SearchCostCurve, Sparkline, SplitHalf,
+  BookWheel, CategoryBars, DivergingBars, NumberLine,
+  SearchBreakdown, SearchCostCurve, SharpeScale, Sparkline,
 } from "./GuideViz";
 import { Tex } from "../components/Tex";
+import { WinnerDemo } from "./WinnerDemo";
+import { ShortcutDemo } from "./ShortcutDemo";
+import { BootstrapExample } from "./BootstrapExample";
+import AuditMethods from "../components/AuditMethods";
+import { GuideNotation } from "../components/GuideNotation";
 
 function Toc() {
   const items = [
@@ -38,11 +45,27 @@ function Figure({ caption, children }: { caption: string; children: React.ReactN
 }
 
 export default function Guide() {
+  useEffect(() => {
+    // Run after the lazy-loaded guide has mounted, so section targets exist.
+    const scrollToSection = () => {
+      const hash = window.location.hash;
+      if (hash.startsWith("#guide/")) {
+        document.getElementById(hash.slice(7))?.scrollIntoView({ block: "start" });
+      }
+    };
+    scrollToSection();
+    window.addEventListener("hashchange", scrollToSection);
+    return () => window.removeEventListener("hashchange", scrollToSection);
+  }, []);
   const t = computeToy();
   const b = backtestToy();
   const dayFive = WALKTHROUGH_DAYS + 1;
   const ret5 = (c: (typeof COINS)[number]) =>
     PRICES[c][dayFive - 1] / PRICES[c][dayFive - 2] - 1;
+  // Day n is weighted from the three returns spanning days n-4 to n-1, then
+  // held into day n. Spelled out once here so section 4 can show the window
+  // sliding rather than assert that it does.
+  const volWindow = (day: number) => `${day - WALKTHROUGH_DAYS}–${day - 1}`;
   // Built from the computed results, so the formula can never disagree with
   // the chart above it.
   // The pieces of the best-of-N expression, computed rather than transcribed.
@@ -52,6 +75,7 @@ export default function Guide() {
   const z1 = invNorm(p1);
   const z2 = invNorm(p2);
   const bestOf44 = expectedBestOfN(N);
+  const exactBest = exactBestOfN(N);
   const exampleSpread = 0.5;   // an illustrative dispersion of trial Sharpes
 
   const pnlSum = b.days
@@ -61,15 +85,13 @@ export default function Guide() {
   return (
     <div style={{ display: "grid", gap: 28 }}>
       <p className="note" style={{ margin: 0 }}>
-        Everything below is computed live from the four prices in the first
-        table — change nothing, just read the arithmetic through. It is a
-        stand-in for the real pipeline: real bars are hourly, the real universe
-        holds ~50 coins out of hundreds, and 44 real trials run at once. Small
-        enough here to check by hand; the same steps, at that scale, are what
-        produced the run you were just looking at.
+        This guide follows a small example from prices to positions, returns
+        and an audit of the winning rule. The app applies the same steps to
+        hourly data, a larger coin universe and multiple trial configurations.
       </p>
 
       <Toc />
+      <GuideNotation />
 
       {/* ---------------------------------------------------------------- 1 */}
       <section id="setup" className="guide-section">
@@ -93,7 +115,7 @@ export default function Guide() {
             </tbody>
           </table>
         </div>
-        <Figure caption="D climbs the most in price. Keep an eye on it — the prices continue past day 4, but sections 2 and 3 use only these.">
+        <Figure caption="D has the largest price increase. Sections 2 and 3 use only these first four days.">
           <div className="row" style={{ gap: 22, justifyContent: "center", flexWrap: "wrap" }}>
             {COINS.map((c) => (
               <Sparkline key={c} label={c}
@@ -107,8 +129,9 @@ export default function Guide() {
       <section id="ranking" className="guide-section">
         <h2>2. From price to a ranking</h2>
         <p>
-          Say the signal is <strong>volatility, negated</strong> — buy the
-          calmest coins, short the choppiest. First, each day's return:
+          The signal is <strong>volatility, negated</strong>: buy coins with
+          lower volatility and short those with higher volatility. First,
+          calculate each day’s return:
         </p>
         <div className="scroll">
           <table>
@@ -132,20 +155,18 @@ export default function Guide() {
           travelled overall.
         </p>
         <Figure caption={
-          `A's mean return is only ${pct(t.rets.A.reduce((a,b)=>a+b,0)/3)}, but its three returns swing `
-          + `between them the most of any coin — that scatter is what "volatility" means here.`
+          `A's mean return is ${pct(t.rets.A.reduce((a,b)=>a+b,0)/3)}. `
+          + `Its returns vary the most around their mean, giving it the highest volatility.`
         }>
           <CategoryBars fmt={pct as (v: number) => string}
                         items={COINS.map((c) => ({ label: c, value: t.vol[c] }))} />
         </Figure>
         <Callout>
-          <strong>The surprise:</strong> D has the biggest price move on the
-          chart above — 100 → 112 — but the <em>smallest</em> volatility of the
-          four. It climbs by similar amounts on all three days, so its returns
-          barely deviate from their own average. A looks calmer on the chart,
-          but two rises followed by a fall makes its returns scatter the most.
-          Volatility measures choppiness, not the size of a trend — mixing the
-          two up is an easy way to misread a real backtest.
+          D rises from {PRICES.D[0]} to {PRICES.D[WALKTHROUGH_DAYS - 1]}, yet
+          has the second-lowest volatility: its daily returns are similar.
+          C finishes below its starting price, but its daily returns vary more than
+          D’s. Volatility measures variation in returns, which can be small
+          even when the total price change is large.
         </Callout>
 
         <p style={{ marginTop: 18 }}>
@@ -203,9 +224,8 @@ export default function Guide() {
         </p>
         <Callout>
           Going into the next day: <strong>short A {pct(Math.abs(t.weight.A), 1)}</strong>, long
-          the rest. The coin that looked calmest on the very first chart is the
-          biggest short — because "calm-looking" and "low-volatility" turned
-          out to be different things once actually measured.
+          the rest. A receives the largest short position because it has the
+          highest measured volatility.
         </Callout>
       </section>
 
@@ -213,16 +233,46 @@ export default function Guide() {
       <section id="scoring" className="guide-section">
         <h2>4. From a position to a score</h2>
         <p>
-          Positions alone are not a result. You hold them into the next day and
-          see what they earn: each coin's return, multiplied by the weight you
-          were holding, added up.
+          Sections 1-3 stopped at day {WALKTHROUGH_DAYS}, which is where the
+          first position could be formed. Here are the three days it is held
+          into — the rest of the toy's prices:
+        </p>
+        <div className="scroll">
+          <table>
+            <thead>
+              <tr><th>day</th>{COINS.map((c) => <th key={c}>{c}</th>)}</tr>
+            </thead>
+            <tbody>
+              {PRICES.A.slice(WALKTHROUGH_DAYS).map((_, i) => (
+                <tr key={i}>
+                  <td>day {WALKTHROUGH_DAYS + 1 + i}</td>
+                  {COINS.map((c) => (
+                    <td key={c}>{PRICES[c][WALKTHROUGH_DAYS + i]}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="sub">
+          C rises to {PRICES.C[WALKTHROUGH_DAYS]} and then falls. The following
+          calculations show how those returns change its volatility and position.
+        </p>
+        <p>
+          Hold the positions through the next day to calculate their returns.
+          Use a portfolio with{" "}
+          <strong>{usd(GROSS_USD, 0)} of gross exposure</strong>: the weights
+          say {usd(Math.abs(t.weight.A) * GROSS_USD, 0)} short A and the other{" "}
+          {usd((1 - Math.abs(t.weight.A)) * GROSS_USD, 0)} spread long across
+          B, C and D. Each position earns its coin's return.
         </p>
         <div className="scroll">
           <table>
             <thead>
               <tr>
-                <th>coin</th><th>weight held</th>
-                <th>day {WALKTHROUGH_DAYS}→{dayFive} return</th><th>contribution</th>
+                <th>coin</th><th>weight held</th><th>position</th>
+                <th>day {WALKTHROUGH_DAYS}→{dayFive} return</th>
+                <th>contribution</th><th>P&amp;L</th>
               </tr>
             </thead>
             <tbody>
@@ -230,28 +280,90 @@ export default function Guide() {
                 <tr key={c}>
                   <td>{c}</td>
                   <td>{signed(t.weight[c] * 100, 1)}%</td>
+                  <td>{usd(t.weight[c] * GROSS_USD)}</td>
                   <td>{pct(ret5(c), 2)}</td>
                   <td>{signed(t.weight[c] * ret5(c) * 100, 3)}%</td>
+                  <td>{usd(t.weight[c] * ret5(c) * GROSS_USD)}</td>
                 </tr>
               ))}
               <tr>
                 <td><strong>day {dayFive} P&amp;L</strong></td>
-                <td /><td />
+                <td /><td /><td />
                 <td><strong>{signed(b.days[0].pnl * 100, 3)}%</strong></td>
+                <td><strong>{usd(b.days[0].pnl * GROSS_USD)}</strong></td>
               </tr>
             </tbody>
           </table>
         </div>
         <p>
-          Then you do it again the next day, and the next — re-ranking, re-weighting,
-          re-holding. Over the toy's ten days that gives {b.days.length} daily results:
+          A short position earns the negative of its coin's return: A rose{" "}
+          {pct(ret5("A"), 2)}, and being short it cost{" "}
+          {usd(Math.abs(t.weight.A * ret5("A") * GROSS_USD))}, which is most of
+          the day's loss. Notice C, though: it jumped {pct(ret5("C"), 2)} after
+          three days of barely moving. You only had{" "}
+          {usd(t.weight.C * GROSS_USD)} allocated to it, so its contribution was
+          small. Its price increase will affect the next day’s weights.
+        </p>
+
+        <h3>Day {dayFive + 1}, step by step</h3>
+        <p>
+          The next day is the same four steps with the window slid forward one
+          day. Nothing from day {dayFive} is carried into it except the price
+          history everyone can see:
+        </p>
+        <ol className="guide-list">
+          <li>
+            <strong>Re-measure.</strong> Volatility over days{" "}
+            {volWindow(dayFive + 1)} instead of days {volWindow(dayFive)} — the
+            day {WALKTHROUGH_DAYS}→{dayFive} return you just traded through is
+            now the newest number in the window, and the oldest one drops out.
+            C's jump enters here, and it triples C's volatility.
+          </li>
+          <li><strong>Re-rank.</strong> Z-score those four volatilities, negate.</li>
+          <li>
+            <strong>Re-weight.</strong> Back to {usd(GROSS_USD, 0)} gross — not{" "}
+            {usd(GROSS_USD + b.days[0].pnl * GROSS_USD)}.
+          </li>
+          <li>
+            <strong>Re-hold.</strong> Into day {dayFive + 1}, and collect
+            whatever it pays.
+          </li>
+        </ol>
+        <Callout>
+          This example keeps gross exposure at {usd(GROSS_USD, 0)} each day.
+          Profits are not reinvested, so dollar P&amp;L is measured against the
+          same amount throughout. The app’s equity curve compounds the daily
+          returns to show portfolio growth.
+        </Callout>
+
+        <p>
+          Repeat for day {dayFive + 2}. Three windows, three different rankings,
+          three results:
         </p>
         <Figure caption={
-          `Gains right of the line, losses left. They very nearly cancel: the average `
-          + `is ${pct(b.avg, 3)} a day against day-to-day swings of ${pct(b.sd, 3)}, `
-          + `so the score is ${b.sharpe.toFixed(3)}.`
+          "One frame per day: the ring is the whole $1,000 of gross, split into "
+          + "what each coin holds. The shorts always fill exactly half of it, so "
+          + "the only thing that moves is which coins are in that half."
         }>
-          <PnlBars days={b.days} avg={b.avg} />
+          <BookWheel days={b.days} coins={COINS} windowLabel={volWindow} />
+        </Figure>
+        <p>
+          The short side changed hands. On day {dayFive} A carried it alone at{" "}
+          {signed(b.days[0].weights.A * 100, 1)}%; once C's jump entered the
+          window, C became the bigger short and A's share fell to{" "}
+          {signed(b.days[1].weights.A * 100, 1)}%. That is the rule reacting to
+          new information, and it is the whole reason the weights are
+          recomputed every day rather than set once. Three days,{" "}
+          {usd(GROSS_USD, 0)} risked on each, and you finish{" "}
+          {usd(Math.abs(b.days[b.days.length - 1].cum * GROSS_USD))}{" "}
+          {b.days[b.days.length - 1].cum < 0 ? "down" : "up"}.
+        </p>
+        <Figure caption={
+          `The average sits ${pct(Math.abs(b.avg), 3)} from zero. The days scatter `
+          + `${pct(b.sd, 3)} around it. The score is the first length measured in `
+          + `units of the second; a negative score means the average return is below zero.`
+        }>
+          <SharpeScale days={b.days} avg={b.avg} sd={b.sd} />
         </Figure>
         <p>
           That ratio — <strong>average return divided by how much it varies</strong> —
@@ -261,26 +373,25 @@ export default function Guide() {
         <Tex tex={String.raw`S \;=\; \frac{\operatorname{mean}_t\left(\pi_t\right)}
                              {\operatorname{sd}_t\left(\pi_t\right)}
                              \;=\; \frac{\dfrac{1}{T}\sum_{t=1}^{T}\pi_t}
-                             {\sqrt{\dfrac{1}{T}\sum_{t=1}^{T}\left(\pi_t-\bar\pi\right)^{2}}}`} />
+                             {\sqrt{\dfrac{1}{T-1}\sum_{t=1}^{T}\left(\pi_t-\bar\pi\right)^{2}}}`} />
         <p>Substituting the {b.days.length} daily results from the chart above:</p>
         <Tex tex={String.raw`S \;=\; \frac{\dfrac{1}{${b.days.length}}\left(${pnlSum}\right)\%}
                              {${(b.sd * 100).toFixed(3)}\%}
                              \;=\; \frac{${(b.avg * 100).toFixed(3)}\%}{${(b.sd * 100).toFixed(3)}\%}
                              \;=\; ${b.sharpe.toFixed(3)}`} />
         <p className="sub">
-          The denominator is the spread of those same six numbers around their
-          average: {(b.sd * 100).toFixed(3)}%. And the real app multiplies the
-          result by the square root of the number of bars in a year to annualise
-          it — doing that to six observations would be theatre, so the raw ratio
-          is shown here.
+          The denominator is the spread of those same {b.days.length} numbers
+          around their average: {(b.sd * 100).toFixed(3)}%, using the same sample
+          standard deviation as the app. The app
+          multiplies the result by the square root of the number of bars in a
+          year to annualise it. This {b.days.length}-day example shows the raw
+          ratio; the sample is too short for a useful annual estimate.
         </p>
         <Callout>
-          A score of {b.sharpe.toFixed(2)} is essentially nothing — the strategy
-          alternates gains and losses because it is shorting the one coin that
-          keeps bouncing. But here is the honest problem: <strong>you cannot tell
-          whether {b.sharpe.toFixed(2)} is good or bad without knowing what a
-          rule with no skill at all would have scored.</strong> That is what the
-          next two sections work out.
+          This rule’s score is {b.sharpe.toFixed(2)}. If we test {N} rules and
+          select the highest score, <strong>that score can be positive even
+          when every rule has a true average return of zero.</strong> The next
+          two sections explain how to account for that selection.
         </Callout>
       </section>
 
@@ -289,132 +400,180 @@ export default function Guide() {
         <h2>5. One trial among many</h2>
         <p>
           That was <strong>one trial</strong>: one measurement, one window, one
-          sign, one rebalance frequency. The real run doesn't try one — a
-          lookback of exactly 72 hours being &ldquo;the&rdquo; right choice
-          would itself be suspicious, so it sweeps a grid.
+          sign, one rebalance frequency. The full search tests several choices
+          of each, producing the following trial count.
         </p>
         <SearchBreakdown />
         <p>
-          Widening that grid is <strong>not free</strong>, and this is the
-          number that makes the rest of the app necessary. Run a search on data
-          with <em>no real edge in it at all</em> and the best trial still comes
-          back positive, purely from luck — and the more trials you run, the
-          luckier the best one gets:
-        </p>
-        <Figure caption="The expected best-of-N Sharpe when nothing has any edge, in units of how much trial Sharpes vary. Same expression the audit layer uses as its noise benchmark — see the Method panel.">
-          <SearchCostCurve />
-        </Figure>
-        <h3>The best of {N} can look good even when every rule is useless</h3>
-        <p>
-          Suppose all {N} rules have no real edge at all. Their measured scores
-          will still bounce around, because of noise. Most will land near zero.
-          Some will look bad. And simply because we tried {N} of them, one will
-          usually look unusually good.
+          Suppose all {N} rules have a true average return of zero. Their
+          measured scores still vary because the sample is finite. Selecting
+          the highest score raises the expected result. We need to calculate{" "}
+          <strong>the average maximum of {N} scores produced by noise.</strong>
         </p>
         <p>
-          The question is: <strong>how good should the best one look, purely by
-          chance?</strong>
+          <strong>Start with the level one score in {N} should reach.</strong>{" "}
+          Treat the {N} scores as independent draws from one bell curve and
+          write <Tex display={false} tex="M" /> for the largest of them.
+          Call <Tex display={false} tex="q" /> the level a single score has
+          a 1 in {N} chance of beating; on a normal curve that is{" "}
+          <Tex display={false} tex={String.raw`${z1.toFixed(2)}\sigma`} />,
+          because {(normCdf(2) * 100).toFixed(2)}% of the
+          curve lies below 2. Across {N} scores, the number expected to beat <Tex display={false} tex="q" />
+          is then exactly one:
         </p>
+        <Tex tex={String.raw`P(Z_i > q) = \frac{1}{${N}} = ${(1 / N).toFixed(4)}
+          \quad\Longrightarrow\quad q = \Phi^{-1}(${p1.toFixed(4)}) = ${z1.toFixed(2)}\sigma
+          \qquad ${N} \times \frac{1}{${N}} = 1`} />
 
         <p>
-          Each of the {N} rules produces one score, and{" "}
-          <strong>the winner is simply the highest-scoring of them</strong> —
-          whichever rule came top. Note that a winner always exists, however
-          badly the whole batch did: if every score is poor, the winner is just
-          the least-bad one. It is the top of the pile, not a rule that passed
-          anything. So the question is where the top of a pile of {N} noisy
-          scores tends to sit.
+          <strong>Expecting one is not the same as getting one.</strong> Some
+          runs produce two or three scores above <Tex display={false} tex="q" />,
+          others none at all. The winner is below <Tex display={false} tex="q" /> only when <em>every</em> score is — one score above
+          is enough to carry the largest above too — and each score falls below
+          with probability <Tex display={false} tex={String.raw`\frac{${N - 1}}{${N}}`} />.
+          Multiplied together, that is the chance
+          the whole batch stays under:
         </p>
-
-        <p>
-          <strong>A first guess: somewhere above {z1.toFixed(0)}σ.</strong> One
-          score in {N} should land in the top 1/{N} of the distribution — that
-          is, above the
-        </p>
-        <Tex tex={String.raw`1-\frac{1}{${N}} = ${p1.toFixed(4)}`} />
-        <p>
-          quantile of a normal distribution, which sits almost exactly at{" "}
-          {z1.toFixed(2)}σ ({(normCdf(2) * 100).toFixed(2)}% of a bell curve lies
-          below 2). If roughly one score should exceed that level, the winner —
-          the largest of them — should exceed it too.
-        </p>
-
-        <p>
-          <strong>But that is a floor, not an answer.</strong> Run the whole
-          experiment once and you get one winner with one score; run it again
-          with fresh noise and the winner scores something different. The
-          winner's score is itself random, so the useful question is not where
-          it sits but how far above {z1.toFixed(0)}σ it typically gets.
-        </p>
-        <p>
-          First, how reliably does it clear {z1.toFixed(0)}σ at all? The top
-          score is below {z1.toFixed(0)}σ exactly when <em>every one</em> of
-          the {N} scores is below it — one score above is enough to lift the
-          top above too — and each falls below with probability 1 − 1/{N}:
-        </p>
-        <Tex tex={String.raw`P(\text{winner} \le ${z1.toFixed(2)}\sigma)
-          = \left(1-\frac{1}{${N}}\right)^{${N}} = ${Math.pow(1 - 1 / N, N).toFixed(2)}
+        <Tex tex={String.raw`P(M \le q) = \left(1-\frac{1}{${N}}\right)^{${N}}
+          = ${Math.pow(1 - 1 / N, N).toFixed(2)}
           \qquad\Longrightarrow\qquad
-          P(\text{winner} > ${z1.toFixed(2)}\sigma) = ${(1 - Math.pow(1 - 1 / N, N)).toFixed(2)}`} />
+          P(M > q) = ${(1 - Math.pow(1 - 1 / N, N)).toFixed(2)}`} />
         <p>
-          So the winner clears the floor about{" "}
-          {((1 - Math.pow(1 - 1 / N, N)) * 100).toFixed(0)}% of the time — and
-          that is not a quirk of {N}. Since (1 − 1/N)<sup>N</sup> → 1/e, the
-          (1 − 1/N) quantile is beaten with probability approaching{" "}
-          1 − 1/e ≈ {((1 - 1 / Math.E) * 100).toFixed(0)}%, largely independent
-          of N once N is moderately large.
+          So the winner beats <Tex display={false} tex="q" /> about{" "}
+          {((1 - Math.pow(1 - 1 / N, N)) * 100).toFixed(0)}% of the time, and
+          not only for {N}: since <Tex display={false} tex={String.raw`(1-1/N)^N \to 1/e`} />,
+          that figure approaches <Tex display={false} tex={String.raw`1-1/e \approx ${((1 - 1 / Math.E) * 100).toFixed(0)}\%`} /> for any <Tex display={false} tex="N" />
+          of moderate size.
         </p>
+
+        <div className="winner-explanation">
+        <div className="winner-copy">
         <p>
-          Second, it sometimes clears the floor by a wide margin — the winner
-          occasionally reaches 3σ or beyond, and those rare outcomes pull the
-          average up. Averaged over many repeats, the winner of {N} scores
-          reaches <strong>{bestOf44.toFixed(2)}σ</strong>: the value marked on
-          the chart above, and what a search of this size typically hands you.
+          <strong>Average the winners across repeated searches.</strong>{" "}
+          Repeat the {N}-rule search with fresh noise and keep each winner.
+          To average them, we need the chance of winning at every score.
+          If <Tex display={false} tex={String.raw`\Phi(x)`} /> is the chance
+          one score falls below <Tex display={false} tex="x" />, all {N} independent
+          scores fall below it with probability:
         </p>
+        <Tex tex={String.raw`P(M \le x) = \Phi(x)^N`} />
         <p>
-          Computing that average directly means blending two quantiles rather
-          than reading off one. γ is the Euler–Mascheroni constant,{" "}
-          {EULER_GAMMA.toFixed(4)}, and Φ<sup>−1</sup> is the reverse lookup
-          from above:
+          With scores measured in <Tex display={false} tex={String.raw`\sigma`} /> units,
+          the band from <Tex display={false} tex="2.0" /> to <Tex display={false} tex="2.1" /> is just one example:
+        </p>
+        <Tex tex={String.raw`P(2.0 < M \le 2.1)
+          = \Phi(2.1)^{${N}} - \Phi(2.0)^{${N}}`} />
+        <p>
+          Average over all bands, including winners below <Tex display={false} tex="2.0" />,
+          weighting each score by its probability. Here <Tex display={false} tex={String.raw`\Delta x`} /> is
+          the band width and <Tex display={false} tex={String.raw`k\in\mathbb{Z}`} /> runs over
+          all integer band labels:
         </p>
         <Tex tex={String.raw`\begin{aligned}
-          \mathbb{E}\!\left[\max_{N}\right]
-          &= (1-\gamma)\,\Phi^{-1}\!\left(1-\frac{1}{N}\right)
-           + \gamma\,\Phi^{-1}\!\left(1-\frac{1}{N e}\right) \\[4pt]
-          &= ${(1 - EULER_GAMMA).toFixed(4)}\cdot ${z1.toFixed(4)}
-           + ${EULER_GAMMA.toFixed(4)}\cdot ${z2.toFixed(4)}
-           \;=\; ${bestOf44.toFixed(4)}\,\sigma
+          \mathbb{E}[M]
+          &= \lim_{\Delta x\to 0}\sum_{k\in\mathbb{Z}} k\Delta x\,
+            \underbrace{\left[\Phi((k+1)\Delta x)^N-\Phi(k\Delta x)^N\right]}
+            _{\text{probability in this band}} \\
+          &= \int_{-\infty}^{\infty} x\,N\phi(x)\Phi(x)^{N-1}\,dx
+          \;\approx\; ${exactBest.toFixed(4)}\,\sigma
           \end{aligned}`} />
         <p className="sub">
-          It is an approximation, and worth knowing which way it errs: the exact
-          average of the curve above is 2.199, so at N = {N} the expression runs
-          about 0.03 high and converges as N grows. It therefore sets the bar
-          slightly too high rather than too low, which is the safe direction for
-          a test meant to reject things.
+          Here <Tex display={false} tex={String.raw`\phi`} /> is the normal bell-curve density;{" "}
+          <Tex display={false} tex={String.raw`N\phi(x)\Phi(x)^{N-1}`} />
+          {" "}is the derivative of <Tex display={false} tex={String.raw`\Phi(x)^N`} />, the winner's cumulative
+          probability above. The integral is the sum as the bands become
+          arbitrarily narrow.
         </p>
+        </div>
+        <WinnerDemo count={N} threshold={z1} expected={exactBest} />
+        </div>
+        <div className="winner-explanation">
+        <div className="winner-copy">
+        <p>
+          <strong>There is a shortcut to this averaging.</strong>{" "}
+          Start at <Tex display={false} tex="q" />, where one score per batch
+          is expected to beat the threshold. Raise it until that count falls
+          to <Tex display={false} tex={String.raw`1/e\approx0.368`} />.
+          The distance between these two levels measures how quickly the
+          upper tail thins:
+        </p>
+        <Tex tex={String.raw`\begin{aligned}
+          N[1-\Phi(q)]&=1 & q&=${z1.toFixed(4)}\sigma \\
+          N[1-\Phi(\text{next level})]&=1/e
+          &\text{next level}&=\Phi^{-1}(1-1/(Ne))=${z2.toFixed(4)}\sigma
+          \end{aligned}`} />
+        <p>
+          Here <Tex display={false} tex={String.raw`\Phi^{-1}`} /> looks up
+          a score from the fraction below it. The shortcut assumes that each
+          further step of this size divides the expected count by{" "}
+          <Tex display={false} tex={String.raw`e\approx2.718`} /> again.
+          Combining that exponential approximation with the “all scores below”
+          calculation gives the large-batch{" "}
+          <a href="https://www.itl.nist.gov/div898/handbook/eda/section3/eda366g.htm">
+            Gumbel distribution
+          </a> approximation for winners. Its average, counting winners on
+          both sides of <Tex display={false} tex="q" />, sits 57.72% of a step
+          above it. This fraction is the Euler–Mascheroni constant,
+          <Tex display={false} tex={String.raw`\gamma\approx0.5772`} />.
+          So add that fraction of the gap to the starting score:
+        </p>
+        <Tex tex={String.raw`\begin{aligned}
+          \mathbb{E}[M] &\approx ${z1.toFixed(4)} + ${EULER_GAMMA.toFixed(4)}
+            \times (${z2.toFixed(4)}-${z1.toFixed(4)})
+            = ${bestOf44.toFixed(4)}\,\sigma \\
+          &= (1-\gamma)\,\Phi^{-1}\!\left(1-\frac{1}{N}\right)
+            + \gamma\,\Phi^{-1}\!\left(1-\frac{1}{N e}\right)
+          \end{aligned}`} />
+        <p className="sub">
+          The trial-count chart below uses this <Tex display={false} tex={String.raw`${bestOf44.toFixed(2)}\sigma`} /> estimate,
+          about <Tex display={false} tex={String.raw`${(bestOf44 - exactBest).toFixed(3)}\sigma`} /> above
+          numerical averaging. Both assume independent normal scores.
+        </p>
+        </div>
+        <ShortcutDemo count={N} lower={z1} upper={z2} />
+        </div>
 
         <h3>Now translate it into Sharpe units</h3>
         <p>
-          If the {N} rules' measured Sharpes have a standard deviation of{" "}
-          {exampleSpread}, then the best-looking rule among them would be
-          expected to reach roughly
+          So far, <Tex display={false} tex={String.raw`${bestOf44.toFixed(2)}\sigma`} /> means
+          the winner sits about {bestOf44.toFixed(2)} standard deviations above
+          zero. To turn that into a Sharpe ratio, we need the spread of the
+          noisy Sharpe estimates. Suppose every rule has a true Sharpe of zero,
+          and its measured Sharpe is normally distributed with standard
+          deviation {exampleSpread}. This is an illustrative assumption about
+          estimation noise, not the volatility of daily returns.
         </p>
-        <Tex tex={String.raw`${bestOf44.toFixed(2)} \times ${exampleSpread}
-          \;\approx\; ${(bestOf44 * exampleSpread).toFixed(1)}`} />
         <p>
-          Sharpe <em>even if every rule had a true Sharpe of zero</em>. So after
-          searching through {N} rules, a Sharpe near{" "}
-          {(bestOf44 * exampleSpread).toFixed(1)} is not automatically
-          impressive — it may simply be the lucky winner the search produced.
-          (Section 4's rule scored {b.sharpe.toFixed(2)}, so it is not close.)
+          Each measured Sharpe is then <Tex display={false} tex={String.raw`S_i=${exampleSpread}Z_i`} />,
+          where <Tex display={false} tex="Z_i" /> is its score in standard-deviation
+          units. Multiplying all scores by the same positive number also
+          multiplies their maximum by that number. For {N} independent rules:
         </p>
+        <Tex tex={String.raw`\mathbb E\!\left[\max_{1\le i\le ${N}} S_i\right]
+          = ${exampleSpread}\,\mathbb E[M]
+          \approx ${exampleSpread}\times${bestOf44.toFixed(2)}
+          \approx ${(bestOf44 * exampleSpread).toFixed(1)}`} />
+        <p>
+          In this example, a search through {N} rules with no real edge produces
+          a best measured Sharpe of about {(bestOf44 * exampleSpread).toFixed(1)}
+          {" "}on average. A result near that value is therefore consistent with
+          selection from noisy estimates. This average is a noise benchmark, not a pass/fail
+          cutoff or a guarantee about any one search.
+        </p>
+        <p>
+          As the number of trials increases, so does the estimated average
+          winner. The curve below measures that increase in standard deviations.
+        </p>
+        <Figure caption="Estimated average best score from independent normal trials with no real edge, in units of the trial-score standard deviation. Section 6 extends this to the app’s dependent trials.">
+          <SearchCostCurve />
+        </Figure>
         <Callout>
-          And the more rules you try, the stronger that lucky winner tends to
-          become: {expectedBestOfN(11).toFixed(2)}σ at 11 trials,{" "}
-          {bestOf44.toFixed(2)}σ at {N}, {expectedBestOfN(500).toFixed(2)}σ at
-          500. Searching harder does not just give you more opportunities to
-          find a real strategy — it gives noise more opportunities to look
-          convincing.
+          Keep the same noise spread of {exampleSpread}, and the estimated
+          average best Sharpe rises with the number of independent rules:
+          {" "}{(expectedBestOfN(11) * exampleSpread).toFixed(2)} for 11,
+          {" "}{(bestOf44 * exampleSpread).toFixed(2)} for {N}, and
+          {" "}{(expectedBestOfN(500) * exampleSpread).toFixed(2)} for 500.
+          Searching more rules raises the expected maximum even when none has an edge.
         </Callout>
       </section>
 
@@ -422,74 +581,110 @@ export default function Guide() {
       <section id="four-tests" className="guide-section">
         <h2>6. Why the winner isn't enough</h2>
         <p>
-          Backtest all 44 trials and one comes out on top. Before believing it,
-          ask the question this whole app exists to ask: <strong>would a search
-          this size have produced an impressive winner even with no real edge in
-          the data?</strong> Four independent tests, each attacking that question
-          from a different angle.
+          Section 5 estimated how high the best score could be without any real
+          edge. That calculation assumed independent trials. Actual rules often
+          use the same prices and similar windows, so their returns move together.
+          Two identical rules, for example, always have the same score: testing
+          both cannot raise the maximum. For jointly normal scores with
+          nonnegative correlations, assuming independence overestimates the
+          average maximum; negative dependence can have the opposite effect. The app
+          therefore estimates the noise benchmark using the actual rules’ return
+          histories.
         </p>
-
-        <h3 style={{ marginTop: 4 }}>Deflated Sharpe</h3>
+        <div className="bootstrap-step">
+        <div className="winner-copy">
         <p>
-          Imagine running the same 44-trial search on <em>pure noise</em> —
-          coin flips, no real pattern. Purely by chance, the best of those 44
-          random trials would still show a positive Sharpe; run 500 random
-          trials instead and the best of those looks even better, from luck
-          alone having more chances. Deflated Sharpe asks whether your actual
-          winner beats what that many looks at random data would already give
-          you.
+          First create returns with no average profit: subtract each rule’s
+          historical mean. Its daily rises and falls remain, but now average
+          zero. For <Tex display={false} tex="T" /> observations, write{" "}
+          <Tex display={false} tex="r_{t,i}" /> for rule{" "}
+          <Tex display={false} tex="i" />’s net return at time{" "}
+          <Tex display={false} tex="t" />:
         </p>
-        <Figure caption="Illustrative only — the shape of a 'best of many random trials' distribution, not this run's actual one. A winner near the peak is indistinguishable from luck; one out past the tail is not.">
-          <BellCurve markerAt={0.86} markerLabel="your winner" />
-        </Figure>
-        <Callout>In the app: the <strong>Deflated Sharpe</strong> tile, and the &ldquo;best the noise would give&rdquo; tile beside it.</Callout>
-
-        <h3>Overfitting probability (PBO)</h3>
+        <Tex tex={String.raw`\bar r_i=\frac1T\sum_{t=1}^T r_{t,i}
+          \quad \tilde r_{t,i}=r_{t,i}-\bar r_i
+          \quad \frac1T\sum_{t=1}^T\tilde r_{t,i}=0`} />
         <p>
-          Split the history in half. Find the best trial using only the first
-          half — the one you would have picked. Check how it does on the
-          second half, which it never saw. Do this many different ways of
-          splitting, and count how often the first-half winner turns out to be
-          only mediocre on the second half. If that happens about as often as
-          not, picking the &ldquo;winner&rdquo; was a coin flip.
+          Next build new histories by sampling these returns, allowing dates
+          to repeat. This is <strong>bootstrapping</strong>. Sample the same
+          dates for every rule so that their returns still move together.
+          Sample consecutive dates in blocks to retain short-term time patterns.
+          The app uses randomly varying block lengths, a method called the{" "}
+          <strong>stationary block bootstrap</strong>.
         </p>
-        <Figure caption="One of many such splits. A trial genuinely worth picking should keep winning in the half it was not chosen on.">
-          <SplitHalf />
-        </Figure>
-        <Callout>In the app: the <strong>trial cloud</strong> chart and the <strong>Overfitting probability</strong> tile.</Callout>
-
-        <h3>Reality check</h3>
         <p>
-          A more rigorous version of the same idea: reshuffle the actual return
-          history thousands of times — preserving how returns cluster day to
-          day rather than scrambling them into pure noise — and each time ask
-          what the best of 44 trials would have scored on the reshuffled data.
-          If the real winner beats nearly all of those reshuffles, it is not
-          explained by luck plus normal market noise.
+          Because every rule is scored in the same simulated history, the app
+          measures their maximum directly. For example, it estimates
+          <Tex display={false} tex={String.raw`P(M\le x)`} /> as the fraction of
+          simulated histories whose maximum is at most <Tex display={false} tex="x" />;
+          it does not multiply the rules’ separate probabilities. Identical
+          rules remain identical in every simulation and cannot raise the maximum.
         </p>
-        <Callout>In the app: the <strong>Reality check p</strong> tile — below 0.05 is the usual bar.</Callout>
-
-        <h3>Cost curve</h3>
         <p>
-          The only one of the four with no statistics in it. Buying and
-          selling coins costs money — the bid/ask spread, exchange fees. Raise
-          that assumed cost until the strategy's edge is completely eaten by
-          it; that crossing point is the <strong>break-even cost</strong>. An
-          edge that breaks even at 8 bps is fragile; one that breaks even at
-          100 bps has real room for error.
+          In simulated history <Tex display={false} tex="b" />,{" "}
+          <Tex display={false} tex="j_b(t)" /> identifies the original date
+          copied into position <Tex display={false} tex="t" />. Each rule’s
+          simulated return is its centered return from that date:
         </p>
-        <Figure caption="Illustrative — Sharpe falling as assumed trading cost rises, crossing zero at the break-even point.">
-          <DecliningLine zeroAt={0.62} label="break-even" />
-        </Figure>
-        <Callout>In the app: the <strong>Cost sensitivity</strong> chart and the <strong>Break-even cost</strong> tile.</Callout>
+        <Tex tex={String.raw`r^{*(b)}_{t,i}=\tilde r_{j_b(t),i}
+          \quad\text{for every rule }i`} />
+        <p>
+          A resampled history can have a positive or negative mean even though
+          the source returns average zero. Score each rule using its new mean
+          and original return standard deviation <Tex display={false} tex="s_i" />.
+          The factor <Tex display={false} tex={String.raw`\sqrt A`} /> annualises
+          the score, where <Tex display={false} tex="A" /> is observations per year:
+          under the usual uncorrelated-return assumption, annual mean return
+          scales by <Tex display={false} tex="A" />, annual standard
+          deviation by <Tex display={false} tex={String.raw`\sqrt A`} />, so their
+          ratio scales by <Tex display={false} tex={String.raw`A/\sqrt A=\sqrt A`} />.
+        </p>
+        <Tex tex={String.raw`S_i=\sqrt A\,\frac{\bar r_i}{s_i}
+          \qquad S_i^{*(b)}=\sqrt A\,
+          \frac{\frac1T\sum_{t=1}^T r^{*(b)}_{t,i}}{s_i}`} />
+        <p>
+          These are the observed score and its simulated counterpart, using
+          the Sharpe calculation from <a href="#guide/scoring">§4</a>.
+          All scores in this section are annualised.
+        </p>
+        <p>
+          Keep the best of the <Tex display={false} tex="N" /> rules in each
+          history, then average those winners across <Tex display={false} tex="B" />
+          {" "}histories. This gives <Tex display={false} tex="S_0" />, the app’s
+          “Best the noise would give” benchmark:
+        </p>
+        <Tex tex={String.raw`S_0=\frac1B\sum_{b=1}^B\max_{1\le i\le N}S_i^{*(b)}`} />
+        </div>
+        <BootstrapExample />
+        </div>
 
-        <p style={{ marginTop: 10 }}>
-          The verdict on the page you came from requires <strong>all four</strong> to
-          pass. Three passing and one failing is still a fail — which is exactly
-          what happened to the low-volatility trial at 50 coins: it cleared PBO,
-          the reality check and the cost bar, and the deflated Sharpe alone said
-          no.
+        <p>
+          With the noise benchmark in hand, the audit checks the observed result
+          in three ways. The app selects its winning rule by the highest average
+          Sharpe across training periods; <Tex display={false} tex={String.raw`S_{\mathrm{winner}}`} />
+          {" "}is that rule’s full-history Sharpe. Only the run’s recorded trials
+          are included in the audit.
         </p>
+        <AuditMethods />
+
+        <h3>What the verdict means</h3>
+        <p>
+          The app’s <strong>“Survives the audit”</strong> verdict requires all
+          three statistical conditions, evaluated on returns after the configured
+          trading costs:
+        </p>
+        <Tex tex={String.raw`\mathrm{DSR}>0.95\qquad\mathrm{PBO}<0.30\qquad p_{\mathrm{reality\ check}}<0.05`} />
+        <p className="sub">
+          These checks are complementary, not independent. The cost curve is
+          a separate sensitivity check; it adds no fourth pass/fail condition.
+        </p>
+        <Callout>
+          A failed audit means the result has not met these evidence thresholds.
+          A pass supports further testing on fresh data with realistic execution
+          costs; it does not guarantee future returns. The app measures whether
+          the winning result provides evidence beyond what the search could
+          produce by chance.
+        </Callout>
       </section>
 
       <p className="note">

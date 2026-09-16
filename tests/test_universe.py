@@ -10,7 +10,7 @@ from __future__ import annotations
 import polars as pl
 import pytest
 
-from alpha_audit.research.universe import UniverseRules, build_universe
+from sharpeluck.research.universe import UniverseRules, build_universe
 from tests.synth import synth_panel
 
 RULES = UniverseRules(max_symbols=10, min_adv_usd=1.0)

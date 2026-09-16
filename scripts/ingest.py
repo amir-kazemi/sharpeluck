@@ -22,10 +22,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import polars as pl
 
-from alpha_audit.config import BRONZE, GOLD
-from alpha_audit.ingest import binance_bulk as bb
-from alpha_audit.ingest import silver as sv
-from alpha_audit.research.universe import UniverseRules, build_universe, write_universe
+from sharpeluck.config import BRONZE, GOLD
+from sharpeluck.ingest import binance_bulk as bb
+from sharpeluck.ingest import silver as sv
+from sharpeluck.research.universe import UniverseRules, build_universe, write_universe
 
 SEED = """
 BTCUSDT ETHUSDT BNBUSDT SOLUSDT XRPUSDT ADAUSDT DOGEUSDT AVAXUSDT DOTUSDT

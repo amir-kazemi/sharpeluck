@@ -7,14 +7,15 @@ const HEIGHT = 300;
 /**
  * The trial cloud. One point per CSCV split: where the in-sample winner landed
  * out of sample. Points below the zero rule are splits where the winner lost
- * money on data it was not chosen on -- PBO is (near enough) how many.
+ * money on data it was not chosen on. PBO instead measures rank below median.
  */
-export function TrialCloud({ points, pbo }: { points: CloudPoint[]; pbo: number }) {
+export function TrialCloud({ points }: { points: CloudPoint[] }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<{ i: number; px: number; py: number } | null>(null);
 
   const xs = points.map((p) => p.is_sharpe_ann);
   const ys = points.map((p) => p.oos_sharpe_ann);
+  const lossFraction = points.length ? ys.filter((v) => v < 0).length / points.length : 0;
   const [xlo, xhi] = padded(Math.min(0, ...xs), Math.max(0, ...xs));
   const [ylo, yhi] = padded(Math.min(0, ...ys), Math.max(0, ...ys));
   const x = linear(xlo, xhi, M.left, width - M.right);
@@ -41,15 +42,15 @@ export function TrialCloud({ points, pbo }: { points: CloudPoint[]; pbo: number 
       <Frame width={width} height={HEIGHT} x={x} y={y}
              xTicks={ticks(xlo, xhi)} yTicks={ticks(ylo, yhi)}
              xLabel="In-sample Sharpe (annualised)" yLabel="Out-of-sample Sharpe">
-        {/* The region that defines overfitting, marked in neutral surface ink. */}
+        {/* Negative OOS returns; this region does not define PBO. */}
         {ylo < 0 && (
           <rect x={M.left} y={y(0)} width={Math.max(0, width - M.right - M.left)}
                 height={Math.max(0, y(ylo) - y(0))} fill="var(--grid)" opacity={0.45} />
         )}
         <line x1={M.left} x2={width - M.right} y1={y(0)} y2={y(0)} stroke="var(--rule)" strokeWidth={1.5} />
         <line x1={x(0)} x2={x(0)} y1={M.top} y2={HEIGHT - M.bottom} stroke="var(--axis)" strokeWidth={1} />
-        <text x={M.left + 6} y={y(0) + 14} fill="var(--text-secondary)" fontSize={10.5}>
-          below: winner lost money out of sample ({(pbo * 100).toFixed(0)}%)
+        <text x={M.left + 6} y={Math.min(y(0) + 14, HEIGHT - M.bottom - 6)} fill="var(--text-secondary)" fontSize={10.5}>
+          below zero: OOS loss ({(lossFraction * 100).toFixed(0)}% of splits)
         </text>
         {points.map((p, i) => (
           <circle key={i} cx={x(p.is_sharpe_ann)} cy={y(p.oos_sharpe_ann)} r={4}

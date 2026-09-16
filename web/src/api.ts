@@ -27,6 +27,11 @@ export type RunStatus = {
   schema_version?: number;
   provenance?: Provenance | null;
   pid?: number | null;
+  backend?: "local" | "slurm" | null;
+  job_id?: string | null;
+  node?: string | null;
+  phase?: "queued" | "preparing" | "trials" | "audit" | "done" | "failed" | null;
+  queue_reason?: string | null;
   run_id: string;
   state: "queued" | "running" | "done" | "failed";
   n_trials: number;
@@ -123,6 +128,19 @@ export type RunSpecInput = {
   label?: string | null;
 };
 
+export type SavedRunSpec = {
+  grids: string[];
+  signs: string[];
+  rebalances: number[];
+  cost_bps: number;
+  n_splits: number;
+  n_blocks: number;
+  n_boot: number;
+  mean_block_h: number;
+  universe: UniverseSpec;
+  label: string | null;
+};
+
 export type Ops = {
   fields: string[];
   ts_ops: string[];
@@ -131,9 +149,21 @@ export type Ops = {
   param_ops: string[];
 };
 
+async function responseError(r: Response): Promise<Error> {
+  const body = await r.text();
+  try {
+    const { detail } = JSON.parse(body);
+    if (typeof detail === "string") return new Error(detail);
+    if (Array.isArray(detail)) {
+      return new Error(detail.map((item) => item.msg).join("; "));
+    }
+  } catch { /* A proxy may return plain text instead of JSON. */ }
+  return new Error(body || `${r.status} ${r.statusText}`);
+}
+
 async function get<T>(path: string): Promise<T> {
   const r = await fetch(`${BASE}${path}`);
-  if (!r.ok) throw new Error(`${r.status} ${r.statusText} on ${path}`);
+  if (!r.ok) throw await responseError(r);
   return r.json() as Promise<T>;
 }
 
@@ -146,11 +176,7 @@ async function post<T>(path: string, body: unknown, token?: string): Promise<T> 
     },
     body: JSON.stringify(body),
   });
-  if (!r.ok) {
-    // FastAPI validation errors carry the DSL parse message; surface it.
-    const detail = await r.text();
-    throw new Error(detail || `${r.status} ${r.statusText}`);
-  }
+  if (!r.ok) throw await responseError(r);
   return r.json() as Promise<T>;
 }
 
@@ -159,12 +185,14 @@ async function del(path: string, token?: string): Promise<void> {
     method: "DELETE",
     headers: token ? { authorization: `Bearer ${token}` } : {},
   });
-  if (!r.ok) throw new Error(await r.text() || `${r.status} ${r.statusText}`);
+  if (!r.ok) throw await responseError(r);
 }
 
 export const api = {
+  health: () => get<{ write_token_required: boolean }>("/healthz"),
   ops: () => get<Ops>("/ops"),
   runs: () => get<RunStatus[]>("/runs"),
+  run: (id: string) => get<{ status: RunStatus; spec: SavedRunSpec }>(`/runs/${id}`),
   trials: (id: string) => get<Trial[]>(`/runs/${id}/trials`),
   audit: (id: string) => get<Audit>(`/runs/${id}/audit`),
   cloud: (id: string) => get<CloudPoint[]>(`/runs/${id}/cloud`),

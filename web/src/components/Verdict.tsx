@@ -1,99 +1,86 @@
-import type { Audit } from "../api";
-import { describe } from "../describe";
+import type { Audit, SavedRunSpec } from "../api";
+import { RunSettings } from "./RunSettings";
 
 function Tile({ label, value, note, help }:
   { label: string; value: string; note?: string; help?: string }) {
   return (
-    <div className="card" style={{ padding: "12px 14px" }}>
-      <div className="tile-label">{label}</div>
-      <div className="tile-value">{value}</div>
-      {note && <div className="sub" style={{ marginTop: 2 }}>{note}</div>}
-      {help && <div className="help">{help}</div>}
+    <div className="verdict-metric">
+      <div className="verdict-metric-label">{label}</div>
+      <div className="verdict-metric-value">{value}</div>
+      {note && <div className="verdict-metric-note">{note}</div>}
+      {help && <div className="verdict-result-description">{help}</div>}
     </div>
   );
 }
 
 /**
- * The lead. One hero figure -- the probability the winner's edge is real once
- * the search is accounted for -- and the numbers that produced it.
+ * The lead: all three tests that determine the verdict.
  *
  * The status colour never carries the verdict alone: it always arrives with a
  * glyph and a word.
  */
-export function Verdict({ audit }: { audit: Audit }) {
+export function Verdict({ audit, spec }: { audit: Audit; spec?: SavedRunSpec }) {
   const { deflation: d, pbo: pb, search_null: sn, cost_curve: cc, winner } = audit;
   const ok = audit.survives;
   const color = ok ? "var(--good)" : "var(--critical)";
+  const checks = [
+    { label: "Deflated Sharpe", value: sn.dsr, passes: sn.dsr > 0.95, threshold: "> 0.95",
+      description: "How confidently the winner clears the noise benchmark." },
+    { label: "Overfitting probability", value: pb.pbo, passes: pb.pbo < 0.30, threshold: "< 0.30",
+      description: "How often the training winner ranks below the middle on held-out data." },
+    { label: "Reality check p", value: sn.rc_p_value, passes: sn.rc_p_value < 0.05, threshold: "< 0.05",
+      description: "How often a no-edge simulation finds a winner at least this good." },
+  ];
 
   return (
     <section className="card">
       <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h3>Verdict</h3>
-          <div className="sub">
-            {describe(winner.expr) ?? "In-sample winner"} — rebalanced every{" "}
-            {winner.rebalance_every_h}h, dollar-neutral. Best of {d.n_trials}{" "}
-            trials searched.
-          </div>
-          <div className="sub" style={{ marginTop: 2 }}>
-            <code>{winner.expr}</code>
-          </div>
-        </div>
+        <h3>Verdict</h3>
         <span className="pill" style={{ borderColor: color, color }}>
           <span aria-hidden>{ok ? "✓" : "✕"}</span>
           <strong>{ok ? "Survives the audit" : "Does not survive"}</strong>
         </span>
       </div>
 
-      <div className="row" style={{ gap: 28, marginTop: 18, alignItems: "flex-end" }}>
-        <div>
-          <div className="hero">{(sn.dsr * 100).toFixed(0)}%</div>
-          <div className="sub" style={{ maxWidth: 340 }}>
-            Deflated Sharpe: the probability this edge is real, given that {d.n_trials} trials
-            were run and behaved like {sn.n_eff.toFixed(1)} independent ones.
-          </div>
+      <div className="verdict-overview">
+        <div className="verdict-results">
+          {checks.map(check => (
+            <div key={check.label} className={`verdict-result ${check.passes ? "verdict-result-pass" : "verdict-result-fail"}`}>
+              <div className="verdict-result-heading">
+                <span>{check.label}</span><span>needs {check.threshold}</span>
+              </div>
+              <div className="verdict-result-reading">
+                <strong>{check.value.toFixed(4)}</strong>
+                <span>{check.passes ? "✓ Pass" : "✕ Fail"}</span>
+              </div>
+              <div className="verdict-result-description">{check.description}</div>
+            </div>
+          ))}
         </div>
-        <p className="sub" style={{ maxWidth: 420, margin: 0 }}>
-          A net Sharpe of {d.sr_ann.toFixed(2)} sounds like something, but the best of this
-          search would have scored {sn.sr0_ann.toFixed(2)} on data with no edge at all. The
-          gross Sharpe is {(winner.gross_sharpe ?? 0).toFixed(2)}, and the edge breaks even at{" "}
-          {cc.break_even_bps?.toFixed(1) ?? "—"} bps of cost against the {winner.cost_bps} bps
-          charged here.
-        </p>
+        {spec && <RunSettings spec={spec} nTrials={d.n_trials} winner={winner} />}
       </div>
 
-      <div className="sub" style={{ marginTop: 20, marginBottom: 6 }}>
-        What was measured
+      <div className="verdict-support-heading">
+        Supporting metrics
       </div>
-      <div className="tiles">
+      <div className="verdict-metrics">
         <Tile label="Net Sharpe" value={d.sr_ann.toFixed(2)}
-              note={`gross ${(winner.gross_sharpe ?? 0).toFixed(2)}`}
-              help="Return per unit of risk, annualised, after costs. Around 1 is respectable; the catch is that a big enough search produces big numbers from nothing." />
-        <Tile label="Best the noise would give" value={sn.sr0_ann.toFixed(2)}
+              note={`${(winner.gross_sharpe ?? 0).toFixed(2)} before costs`}
+              help="Winner’s annualised score after costs; compared with the noise benchmark." />
+        <Tile label="Noise benchmark" value={sn.sr0_ann.toFixed(2)}
               note={`${d.sr0_ann.toFixed(2)} if the trials were independent`}
-              help="Run this same search on data with no edge in it and the winner would still score about this. The observed Sharpe has to beat it to mean anything." />
+              help="Average best Sharpe in no-edge simulations; used by Deflated Sharpe." />
         <Tile label="Effective trials" value={`${sn.n_eff.toFixed(1)} / ${d.n_trials}`}
-              note={`average correlation ${sn.mean_abs_corr.toFixed(2)}`}
-              help="The trials overlap heavily — nested windows, and every signal run beside its own negation — so they amount to fewer genuinely independent looks than the raw count." />
-      </div>
-
-      <div className="sub" style={{ marginTop: 20, marginBottom: 6 }}>
-        The four tests · all must pass
-      </div>
-      <div className="tiles">
-        <Tile label="Deflated Sharpe" value={sn.dsr.toFixed(3)}
-              note={sn.dsr > 0.95 ? "passes (> 0.95)" : "fails (needs > 0.95)"}
-              help="Probability the edge is real once the size of the search is accounted for. This is the headline number above." />
-        <Tile label="Overfitting probability" value={pb.pbo.toFixed(2)}
-              note={`loses money out of sample ${(pb.prob_oos_loss * 100).toFixed(0)}% of splits`}
-              help="Split the history in half many times over: how often does the winner of one half fall below average in the other? 0.5 means picking it was a coin flip." />
-        <Tile label="Reality check p" value={sn.rc_p_value.toFixed(3)}
-              note={`${sn.n_boot} resampled histories`}
-              help="The chance of seeing a winner this good if none of the trials had any edge. Below 0.05 is the usual bar." />
+              note={`mean |correlation| ${sn.mean_abs_corr.toFixed(2)}`}
+              help="Independent trials giving the same noise benchmark. Context for the search size." />
         <Tile label="Break-even cost" value={`${cc.break_even_bps?.toFixed(1) ?? "—"} bps`}
-              note={`vs ${winner.cost_bps} bps charged here`}
-              help="The trading cost at which the edge disappears entirely. The further above what you actually pay, the more room for error." />
+              note={`${winner.cost_bps} bps charged in this run`}
+              help="Cost that brings average net return to zero. Shows sensitivity to trading costs." />
       </div>
+      <details className="verdict-statistics">
+        <summary>All statistics</summary>
+        <div className="scroll"><AuditTable audit={audit} /></div>
+      </details>
     </section>
   );
 }

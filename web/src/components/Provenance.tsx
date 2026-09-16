@@ -37,7 +37,7 @@ export function ProvenanceBar({ p, u }: { p: Provenance; u?: UniverseSpec }) {
 
   return (
     <section className="card">
-      <h3>The data</h3>
+      <h3>Data</h3>
 
       <div className="timeline">
         <div className="row" style={{ justifyContent: "space-between" }}>
@@ -86,8 +86,8 @@ export function ProvenanceBar({ p, u }: { p: Provenance; u?: UniverseSpec }) {
           </div>
           <div className="sub" style={{ marginTop: 10 }}>
             The universe is rebuilt at every rebalance from the data available at
-            that moment, so pairs that later died — LUNA, FTT — are still in it on
-            the days they were liquid.
+            that moment. Pairs that were later delisted remain eligible on
+            earlier dates when they met the selection criteria.
           </div>
         </>
       )}

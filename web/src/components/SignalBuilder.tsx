@@ -25,17 +25,17 @@ const HINT: Record<keyof typeof MEASURES, string> = {
     "How much the coin rose or fell over the window. Buys recent winners; " +
     "negated, it buys recent losers instead.",
   vol:
-    "How much the coin's hourly returns swung about. Buys the wildest coins; " +
-    "negated, it buys the calmest.",
+    "How much the coin’s hourly returns vary. Buys coins with higher volatility; " +
+    "negated, it buys those with lower volatility.",
   buy:
     "What share of trading was aggressive buying rather than selling. Buys " +
-    "the coins buyers have been chasing.",
+    "coins with a higher share of buyer-initiated trading.",
   volume:
-    "How much money changed hands. Buys the largest, most liquid coins; " +
-    "negated, the smallest.",
+    "Average dollar trading volume. Buys coins with higher volume; " +
+    "negated, it buys those with lower volume.",
   trades:
     "How many separate trades happened, regardless of size. Buys the most " +
-    "actively traded coins — many small trades rather than a few large ones.",
+    "frequently traded coins.",
 };
 
 export const WINDOWS = [

@@ -14,6 +14,7 @@ export function Tex({ tex, display = true }: { tex: string; display?: boolean })
     // formula check greps for exactly this, so the two must agree.
     errorColor: "#cc0000",
   });
+  if (!display) return <span dangerouslySetInnerHTML={{ __html: html }} />;
   return (
     <div className={display ? "formula" : undefined}
          dangerouslySetInnerHTML={{ __html: html }} />

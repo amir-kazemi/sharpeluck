@@ -15,9 +15,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import numpy as np
 import polars as pl
 
-from alpha_audit.config import GOLD
-from alpha_audit.research.audit import cost_curve, deflate, pbo, reality_check
-from alpha_audit.research.backtest import HOURS_PER_YEAR
+from sharpeluck.config import GOLD
+from sharpeluck.research.audit import cost_curve, deflate, pbo, reality_check
+from sharpeluck.research.backtest import HOURS_PER_YEAR
 
 N_BLOCKS = 10
 MEAN_BLOCK_H = 48.0   # positions are held ~24h, so resample in longer blocks

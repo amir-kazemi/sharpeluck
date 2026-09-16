@@ -1,19 +1,19 @@
-# alpha-audit
+# SharpeLuck
 
-**How much of your Sharpe is selection bias?**
+*Is your crypto strategy just lucky?*
 
 A cross-sectional factor research platform whose headline output is not a Sharpe
 ratio but an estimate of how much of that Sharpe survives the fact that you
 looked at thousands of configurations before picking it. Signals are defined as
-parameter *ranges*, expanded into a trial grid, backtested in parallel on Azure,
+parameter *ranges*, expanded into a trial grid, backtested in parallel,
 and then put through Deflated Sharpe Ratio, combinatorial cross-validation
 (PBO), a stationary-bootstrap reality check, and a transaction-cost sensitivity
 curve.
 
 ## Layout
 
-    alpha_audit/ingest/     bronze download + silver aggregation
-    alpha_audit/research/   universe, signals, backtest, audit
+    sharpeluck/ingest/     bronze download + silver aggregation
+    sharpeluck/research/   universe, signals, backtest, audit
     scripts/ingest.py       bronze -> silver -> gold driver
     tests/                  causality tests (run these first)
     data -> scratch         the lake; never in git, fully reproducible
@@ -80,14 +80,15 @@ read as an edge until they have been deflated.
 
 ## The audit layer
 
-Four independent tests, plus the quantities they are built from:
+Three statistical checks and a separate cost-sensitivity curve. The checks are
+not statistically independent:
 
 | | asks |
 |---|---|
 | **Deflated Sharpe Ratio** | Does the winner beat the Sharpe that the *best of N* noise strategies would have handed you, given non-normal returns? |
 | **PBO** (CSCV) | Across many half-sample splits, how often does the in-sample winner land below the out-of-sample median? |
-| **Reality Check** | Studentised White/Hansen statistic on a Politis–Romano stationary bootstrap, so autocorrelation is preserved and the null is imposed on all N trials jointly. |
-| **Effective N** | Same bootstrap pass: how many *independent* trials this search was actually worth, which is what the DSR needs and cannot assume. |
+| **Reality Check** | Standardized maximum-Sharpe statistic on a stationary block bootstrap, resampling all trials together under zero mean. |
+| **Effective N** | A diagnostic: how many independent normal trials would give the measured average maximum at the simulated score spread. DSR uses the bootstrap benchmark directly. |
 | **Cost curve** | At what assumed cost in bps does the edge die? |
 
 Calibration is asserted by simulation rather than against constants copied from
@@ -114,8 +115,10 @@ search was worth.
     effective trials             20.5 of 44
 
 `test_measured_null_matches_the_analytic_one_when_trials_really_are_independent`
-pins the two together where the analytic form is valid; the divergence above is
-therefore the correlation structure, not a bug.
+compares the two where independence is valid. In real runs they also use
+different spread estimates: observed trial Sharpes for the analytic diagnostic,
+bootstrap scores for the measured benchmark. Their gap cannot be attributed
+solely to correlation.
 
 A correlation-matrix participation ratio is reported alongside (3.7 here, mean
 |corr| 0.40) but not trusted over the bootstrap. It counts a signal and its
@@ -144,7 +147,8 @@ daily:
     effective trials            18.5 of 44
     break-even cost           102.1 bps   against 5 bps charged
 
-**Three of the four lenses pass. The deflated Sharpe does not: 0.83 is not 0.95.**
+**PBO and the reality check pass; deflated Sharpe does not: 0.83 is below 0.95.**
+The cost curve is a separate sensitivity check, with no pass/fail threshold.
 So the verdict is still *does not survive*, but for a much more interesting
 reason than the 10-month sample, where the winner was noise outright.
 
@@ -196,7 +200,7 @@ whole sample by luck alone — consistently enough that the in-sample winner kee
 winning out of sample, which is exactly what a low PBO reports. It is not a
 defect in the implementation; it is what the statistic measures. The deflated
 Sharpe and the reality check are what actually did the rejecting here, and this
-is the concrete reason the platform reports four independent lenses rather than
+is the concrete reason the platform reports complementary checks rather than
 the one everybody quotes.
 
 ## Running it
@@ -219,7 +223,7 @@ cd web && npm install && cd ..
 
 Both layers can live outside the repo (they do here, on scratch, because home
 has an inode quota). Point `scripts/env.sh` at them with
-`ALPHA_AUDIT_ENV_ROOT=/path/to/envs`; it defaults to `/scratch/$USER/alpha-audit`.
+`SHARPELUCK_ENV_ROOT=/path/to/envs`; it defaults to `/scratch/$USER/sharpeluck`.
 
 ### Every session — put the tools on PATH
 
@@ -248,14 +252,28 @@ cd /path/to/sharpeluck
 uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-On a cluster, add `ALPHA_AUDIT_SUBMIT` so a run submitted from the UI executes
-on a compute node instead of the machine serving the API — a full-breadth run
-will die on a login node:
+When `sbatch` is available, the API submits interface runs to Slurm by default.
+You can also select it explicitly:
 
 ```bash
-ALPHA_AUDIT_SUBMIT="sbatch --export=ALL,RUN_ID={run_id} your batch script" \
+SHARPELUCK_BACKEND=slurm \
   uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
 ```
+
+**Run audit** saves the settings and submits your batch script: account
+and partition `your-account`, 8 hours, 4 CPUs, 64 GB RAM, and one Quadro RTX 6000
+GPU as requested for this allocation. The calculations currently use only the
+CPUs. Data preparation, all trials, and the final audit run on the compute node.
+Two trials run concurrently and share the prepared panel to limit memory use.
+
+The interface shows **Queued → Data → Trials → Audit**, along with the Slurm
+job ID and allocated node. It checks Slurm for failures, including memory
+limits and timeouts. Each run keeps its output in `dispatch.log` and its
+launcher metadata in `execution.json`; submission does not overwrite progress.
+
+Use `SHARPELUCK_BACKEND=local` only when you intend to execute on the API host,
+such as with small test data. On machines without Slurm, local is the default.
+An existing `SHARPELUCK_SUBMIT="sbatch ..."` override is still supported.
 
 **Terminal 2 — the UI, on port 5173**
 
@@ -266,6 +284,15 @@ cd web && npm run dev
 ```
 
 Then open **http://localhost:5173**. API docs are at **http://localhost:8000/docs**.
+
+The **Write token** field appears only when the API is started with
+`SHARPELUCK_TOKEN` set. That token is required to submit or delete runs;
+reading results needs no token. Local development needs none by default.
+
+You can delete every completed or failed run and then submit your own. Runs
+are independent: deleting one removes its results and prepared panel, while
+the source market data in `silver/` remains available for new runs. No default
+run is required. Queued and running jobs must finish before deletion.
 
 ### If the servers are on a remote machine
 
@@ -285,7 +312,7 @@ both servers and matching `-L` forwards.
 ### Everything else
 
 ```bash
-pytest -q                                  # 55 tests
+pytest -q                                  # backend and API tests
 cd web && npm run build                    # typecheck + diagram geometry checks + bundle
 python scripts/run.py --label baseline     # a run from the command line
 python scripts/null_test.py --seeds 20     # the null-data self-test

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type RunSpecInput } from "../api";
+import { api, type RunSpecInput, type RunStatus } from "../api";
 import {
   DEFAULT_ROWS, SignalBuilder, type Row, rowsToGrids,
 } from "./SignalBuilder";
@@ -62,6 +62,9 @@ export function SubmitPanel(
   const submit = useMutation({
     mutationFn: () => api.submit(spec, token || undefined),
     onSuccess: (st) => {
+      qc.setQueryData<RunStatus[]>(["runs"], (runs = []) => [
+        st, ...runs.filter((run) => run.run_id !== st.run_id),
+      ]);
       qc.invalidateQueries({ queryKey: ["runs"] });
       onSubmitted(st.run_id);
     },
@@ -77,10 +80,9 @@ export function SubmitPanel(
           <div className="sub">
             Each signal ranks every coin in the universe, then buys the top of
             the ranking and shorts the bottom. <em>by size</em> gives bigger
-            positions to more extreme coins; <em>by order</em> ignores how
-            extreme they are, which is the more robust of the two. More windows
-            widens the search — not free, since every extra trial raises the
-            Sharpe the winner has to beat.
+            positions to coins farther from the average; <em>by order</em> uses
+            their ranks. Additional windows create more trials, which can raise
+            the noise benchmark used to judge the winner.
           </div>
         </div>
         <div className="row" style={{ gap: 6 }}>

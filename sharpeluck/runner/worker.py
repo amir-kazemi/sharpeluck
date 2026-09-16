@@ -1,6 +1,6 @@
 """One trial, start to finish. This is the container entrypoint.
 
-    ALPHA_AUDIT_RUN_ID=... ALPHA_AUDIT_TRIAL=7 python -m alpha_audit.runner.worker
+    SHARPELUCK_RUN_ID=... SHARPELUCK_TRIAL=7 python -m sharpeluck.runner.worker
 
 Reads the prepared panel and its trial spec from the store, backtests, writes
 the summary and the per-bar series back. It holds no state and talks to nothing
@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import sys
+from threading import Lock
 
 import polars as pl
 
@@ -19,12 +20,24 @@ from .spec import RunSpec, TrialSpec
 from .store import LocalStore, ResultStore
 
 _PANEL: dict[str, pl.DataFrame] = {}   # per-process cache; the panel is immutable
+_PANEL_LOCK = Lock()
 
 
 def panel_for(store: ResultStore, run_id: str) -> pl.DataFrame:
-    if run_id not in _PANEL:
-        _PANEL[run_id] = store.get_table(f"{run_id}/panel.parquet")
-    return _PANEL[run_id]
+    with _PANEL_LOCK:
+        if run_id not in _PANEL:
+            _PANEL[run_id] = store.get_table(f"{run_id}/panel.parquet")
+        return _PANEL[run_id]
+
+
+def set_panel(run_id: str, panel: pl.DataFrame) -> None:
+    with _PANEL_LOCK:
+        _PANEL[run_id] = panel
+
+
+def clear_panel(run_id: str) -> None:
+    with _PANEL_LOCK:
+        _PANEL.pop(run_id, None)
 
 
 def run_one(store: ResultStore, run_id: str, trial: TrialSpec, spec: RunSpec) -> dict:
@@ -43,8 +56,8 @@ def run_one(store: ResultStore, run_id: str, trial: TrialSpec, spec: RunSpec) ->
 
 
 def main() -> int:
-    run_id = os.environ["ALPHA_AUDIT_RUN_ID"]
-    i = int(os.environ["ALPHA_AUDIT_TRIAL"])
+    run_id = os.environ["SHARPELUCK_RUN_ID"]
+    i = int(os.environ["SHARPELUCK_TRIAL"])
     store = LocalStore()
     spec = RunSpec.model_validate(store.get_json(f"{run_id}/spec.json"))
     run_one(store, run_id, spec.trials()[i], spec)

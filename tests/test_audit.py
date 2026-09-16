@@ -14,7 +14,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from alpha_audit.research.audit import (
+from sharpeluck.research.audit import (
     _null_bootstrap, cost_curve, deflate, effective_n_trials, expected_max_sharpe,
     participation_ratio, pbo, probabilistic_sharpe_ratio, reality_check,
     search_null, stationary_bootstrap_indices,
@@ -215,10 +215,31 @@ def test_effective_n_is_monotone_and_degenerate_cases_are_one():
     sd = 0.02
     ns = [effective_n_trials(expected_max_sharpe(n, sd), sd) for n in (5, 20, 100)]
     assert ns == sorted(ns)
-    assert all(abs(a - b) < 0.15 * b for a, b in zip(ns, (5, 20, 100))), ns
+    assert ns == pytest.approx([5, 20, 100])
     assert effective_n_trials(0.0, sd) == 1.0
     assert effective_n_trials(-1.0, sd) == 1.0
     assert effective_n_trials(0.05, 0.0) == 1.0
+
+
+@pytest.mark.parametrize("n", [2.1, 5.25, 20.8, 100.3])
+def test_effective_count_reproduces_its_benchmark_without_rounding(n):
+    benchmark = expected_max_sharpe(n, 0.02)
+    inferred = effective_n_trials(benchmark, 0.02)
+    assert inferred == pytest.approx(n)
+
+
+def test_bootstrap_benchmark_and_p_value_match_explicit_shared_histories():
+    """Check the guide's equations against the actual audit on a small example."""
+    m = np.array([[.003, .002], [.002, .001], [-.001, -.002],
+                  [-.002, -.001], [.004, .003], [0., 0.]])
+    idx = stationary_bootstrap_indices(6, 80, 2, np.random.default_rng(4))
+    centered = m - m.mean(0)
+    sd = m.std(0, ddof=1)
+    scores = centered[idx].mean(axis=1) / sd
+    maxima = scores.max(axis=1)
+    sn = search_null(m, 0, 365, n_boot=80, mean_block=2, seed=4)
+    assert sn.sr0_ann == pytest.approx(maxima.mean() * np.sqrt(365))
+    assert sn.rc_p_value == pytest.approx((maxima >= (m.mean(0) / sd).max()).mean())
 
 
 def test_bootstrap_gather_is_chunked_without_changing_the_answer():

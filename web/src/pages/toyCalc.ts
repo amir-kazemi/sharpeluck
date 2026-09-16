@@ -10,15 +10,18 @@
 export const COINS = ["A", "B", "C", "D"] as const;
 export type Coin = (typeof COINS)[number];
 
-/** Ten days, each coin keeping its character: A choppy, B steadily declining,
- *  C oscillating tightly, D trending smoothly up. Sections 1-3 use the first
- *  four; the rest exist so positions have somewhere to be held into and the
- *  walkthrough can end in an actual score rather than asserting one. */
+/** Seven days. Over the first four each coin keeps a character -- A choppy, B
+ *  steadily declining, C oscillating tightly, D trending smoothly up -- and
+ *  sections 1-3 use only those. Days 5-7 exist so positions have somewhere to
+ *  be held into, and C breaks character there on purpose: its jump to 104 is
+ *  large enough to carry it above mean volatility, so the ranking genuinely
+ *  changes hands from one day to the next instead of returning the same
+ *  weights three times and looking like a constant. */
 export const PRICES: Record<Coin, number[]> = {
-  A: [100, 102, 105, 103, 107, 104, 108, 105, 109, 106],
-  B: [100, 99, 97, 96, 95, 94, 93, 92, 91, 90],
-  C: [100, 101, 100, 99, 100, 99, 100, 99, 100, 99],
-  D: [100, 103, 108, 112, 116, 119, 123, 126, 130, 133],
+  A: [100, 102, 105, 103, 107, 104, 108],
+  B: [100, 99, 97, 96, 95, 94, 93],
+  C: [100, 101, 100, 99, 104, 99, 103],
+  D: [100, 103, 108, 112, 116, 119, 123],
 };
 
 /** Sections 1-3 walk through this many days; the volatility window needs three
@@ -29,7 +32,7 @@ export const VOL_WINDOW = 3;
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 const std = (xs: number[]) => {
   const m = mean(xs);
-  return Math.sqrt(mean(xs.map((x) => (x - m) ** 2)));
+  return Math.sqrt(xs.reduce((sum, x) => sum + (x - m) ** 2, 0) / (xs.length - 1));
 };
 
 export function returns(prices: number[]): number[] {
@@ -53,17 +56,30 @@ export function positionsAt(day: number) {
   return byCoin((c) => negZ[c] / sumAbs);
 }
 
+/** The book is sent out the same size every day -- profits are settled aside
+ *  rather than reinvested -- so each day's return is a return on the same
+ *  denominator and averaging them is meaningful. A dollar figure is given
+ *  purely so the guide's percentages have something concrete to be a
+ *  percentage of. */
+export const GROSS_USD = 1000;
+export const usd = (v: number, d = 2) =>
+  `${v < 0 ? "-" : ""}$${Math.abs(v).toFixed(d)}`;
+
 /** Hold each day's positions into the next day and collect the P&L. */
 export function backtestToy() {
-  const days: { day: number; pnl: number; weights: Record<Coin, number> }[] = [];
+  const days: { day: number; pnl: number; cum: number; weights: Record<Coin, number> }[] = [];
   const lastDay = PRICES.A.length;
+  let cum = 0;
   for (let d = VOL_WINDOW + 1; d < lastDay; d++) {
     const weights = positionsAt(d);
     const pnl = COINS.reduce((acc, c) => {
       const r = PRICES[c][d] / PRICES[c][d - 1] - 1;   // day d -> d+1
       return acc + weights[c] * r;
     }, 0);
-    days.push({ day: d + 1, pnl, weights });
+    // A plain sum, not a compounding product: every day risks the same book,
+    // so the money made is just the returns added up.
+    cum += pnl;
+    days.push({ day: d + 1, pnl, cum, weights });
   }
   const pnls = days.map((x) => x.pnl);
   const avg = mean(pnls);
@@ -91,8 +107,8 @@ export const signed = (v: number, d = 2) => (v >= 0 ? "+" : "") + v.toFixed(d);
 /* ------------------------------------------------------------------------ *
  * The cost of looking more times.
  *
- * The same expression the audit layer uses for its noise benchmark (SR0 in the
- * Method panel), evaluated here in units of "standard deviations of trial
+ * The analytic benchmark shown alongside the bootstrap benchmark, evaluated
+ * here in units of "standard deviations of trial
  * Sharpe" so it needs no data to be meaningful: it is the expected best of N
  * independent trials that all have zero real edge.
  * ------------------------------------------------------------------------ */
@@ -140,4 +156,23 @@ export function expectedBestOfN(n: number): number {
   if (n < 2) return 0;
   return (1 - EULER_GAMMA) * invNorm(1 - 1 / n)
        + EULER_GAMMA * invNorm(1 - 1 / (n * Math.E));
+}
+
+/**
+ * The same quantity without the Gumbel approximation: the exact mean of the
+ * largest of n standard normals, E[max] = integral of x n f(x) F(x)^(n-1).
+ *
+ * Here only so the guide can state the approximation's error by computing both
+ * and subtracting, rather than asserting a number the reader cannot check. The
+ * app's verdict uses the bootstrap benchmark; this normal calculation is the
+ * independent-trials illustration.
+ */
+export function exactBestOfN(n: number, steps = 20_000): number {
+  if (n < 2) return 0;
+  const lo = -10, hi = 12, h = (hi - lo) / steps;
+  const pdf = (x: number) => Math.exp(-x * x / 2) / Math.sqrt(2 * Math.PI);
+  const f = (x: number) => x * n * pdf(x) * Math.pow(normCdf(x), n - 1);
+  let total = f(lo) + f(hi);
+  for (let i = 1; i < steps; i++) total += (i % 2 ? 4 : 2) * f(lo + i * h);
+  return (total * h) / 3;
 }

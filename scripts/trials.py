@@ -16,11 +16,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import polars as pl
 
-from alpha_audit.config import GOLD
-from alpha_audit.ingest.silver import load_panel
-from alpha_audit.research import dsl
-from alpha_audit.research.backtest import BacktestParams, WalkForward, run_trial
-from alpha_audit.research.signals import prepare_panel
+from sharpeluck.config import GOLD
+from sharpeluck.ingest.silver import load_panel
+from sharpeluck.research import dsl
+from sharpeluck.research.backtest import BacktestParams, WalkForward, run_trial
+from sharpeluck.research.signals import prepare_panel
 
 GRIDS = [
     "cs_zscore(ts_ret(close, [12, 24, 72, 168, 336]))",          # price trend

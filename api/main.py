@@ -1,43 +1,29 @@
 """The research API.
 
-Reads and writes nothing but the store, and never computes a run in-process: a
-POST records the spec and launches the dispatcher as a separate process. In
-Azure that launch becomes a queue message and the dispatcher becomes a
-Container Apps Job, which is the only line that changes.
+A POST records the spec and submits a compute job. Data preparation, trials
+and audit calculations all run in that job, outside the HTTP server.
 """
 from __future__ import annotations
 
 import os
-import shlex
-import signal
 import subprocess
-import sys
-from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from alpha_audit.research import dsl
-from alpha_audit.runner.dispatch import create
-from alpha_audit.runner.spec import RunSpec, RunStatus
-from alpha_audit.runner.store import LocalStore, ResultStore
+from sharpeluck.research import dsl
+from sharpeluck.runner.dispatch import create
+from sharpeluck.runner.jobs import backend, fail, launch, reconcile
+from sharpeluck.runner.spec import RunSpec, RunStatus
+from sharpeluck.runner.store import LocalStore, ResultStore
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
 # Submitting a run costs compute; reading results does not. One token, checked
 # on writes only, is the whole authorisation model -- see the README.
-WRITE_TOKEN = os.environ.get("ALPHA_AUDIT_TOKEN")
-
-# How a submitted run gets executed. Unset means "run it here", which is fine
-# for a small panel and wrong for a large one -- a full-breadth run wants a
-# compute node, not the machine serving the API. Set it to a scheduler command
-# containing {run_id}, e.g.
-#   ALPHA_AUDIT_SUBMIT="sbatch --export=ALL,RUN_ID={run_id} your batch script"
-# In Azure this is the line that becomes "put a message on the queue".
-SUBMIT_CMD = os.environ.get("ALPHA_AUDIT_SUBMIT")
+WRITE_TOKEN = os.environ.get("SHARPELUCK_TOKEN")
 
 app = FastAPI(
-    title="alpha-audit",
-    summary="How much of your Sharpe is selection bias?",
+    title="SharpeLuck",
+    summary="Is your crypto strategy just lucky?",
     version="0.3.0",
 )
 app.add_middleware(
@@ -48,7 +34,7 @@ app.add_middleware(
 )
 
 
-def store() -> ResultStore:
+def store() -> LocalStore:
     return LocalStore()
 
 
@@ -56,7 +42,7 @@ def require_write(authorization: str | None = Header(default=None)) -> None:
     if not WRITE_TOKEN:
         return                                  # open in local development
     if authorization != f"Bearer {WRITE_TOKEN}":
-        raise HTTPException(401, "a write token is required to submit runs")
+        raise HTTPException(401, "a valid write token is required to submit or delete runs")
 
 
 def _need(s: ResultStore, key: str):
@@ -65,42 +51,10 @@ def _need(s: ResultStore, key: str):
     return key
 
 
-def _alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
-def reconcile(s: ResultStore, st: RunStatus) -> RunStatus:
-    """A dispatcher that dies takes no status with it, so a crashed run would
-    otherwise sit at `running` for ever. If we launched it locally and its
-    process is gone without the run finishing, record that -- with whatever it
-    managed to say before it went."""
-    if st.state not in ("queued", "running") or st.pid is None or _alive(st.pid):
-        return st
-    log = f"{st.run_id}/dispatch.log"
-    tail = ""
-    if s.exists(log):
-        try:
-            tail = (LocalStore().root / log).read_text()[-4000:]
-        except OSError:
-            pass
-    st.state = "failed"
-    st.error = (
-        f"the dispatcher (pid {st.pid}) exited after {st.n_done}/{st.n_trials} "
-        f"trials without finishing. Its output follows.\n\n{tail or '(no output captured)'}"
-    )
-    s.put_json(f"{st.run_id}/status.json", st.model_dump())
-    return st
-
-
 @app.get("/healthz")
 def healthz() -> dict:
-    return {"ok": True, "version": app.version}
+    return {"ok": True, "version": app.version,
+            "write_token_required": bool(WRITE_TOKEN), "runner": backend()}
 
 
 @app.get("/ops")
@@ -133,25 +87,18 @@ def preview(spec: RunSpec) -> dict:
 
 
 @app.post("/runs", status_code=202)
-def submit(spec: RunSpec, s: ResultStore = Depends(store),
+def submit(spec: RunSpec, s: LocalStore = Depends(store),
            _: None = Depends(require_write)) -> RunStatus:
     st = create(spec, s)
-    # Never discard the dispatcher's output: a silent crash is indistinguishable
-    # from a long run, which is exactly how a stuck run goes unnoticed.
-    log_path = LocalStore().root / st.run_id / "dispatch.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    handle = open(log_path, "ab", buffering=0)
-    cmd = (shlex.split(SUBMIT_CMD.format(run_id=st.run_id)) if SUBMIT_CMD
-           else [sys.executable, "-m", "alpha_audit.runner.dispatch", st.run_id])
-    proc = subprocess.Popen(
-        cmd, cwd=REPO_ROOT, start_new_session=True,
-        stdout=handle, stderr=subprocess.STDOUT,
-    )
-    # Only track the pid when we own the process; a scheduler's submit command
-    # exits immediately and its pid would look dead at once.
-    if not SUBMIT_CMD:
-        st.pid = proc.pid
-        s.put_json(f"{st.run_id}/status.json", st.model_dump())
+    try:
+        execution = launch(s, st.run_id)
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as exc:
+        detail = exc.stderr if isinstance(exc, subprocess.CalledProcessError) else str(exc)
+        return fail(s, st.run_id, f"Could not launch the run: {detail or exc}")
+    # The job may already be preparing data. Never write this older queued
+    # snapshot over the worker's status.
+    st = RunStatus.model_validate(s.get_json(f"{st.run_id}/status.json"))
+    st.backend, st.job_id, st.pid = execution["backend"], execution.get("job_id"), execution.get("pid")
     return st
 
 
@@ -192,7 +139,10 @@ def delete_run(run_id: str, s: ResultStore = Depends(store),
                _: None = Depends(require_write)) -> Response:
     """Discard a run and its artefacts. Write-gated like submission: a run is
     tens of megabytes of stored panel, but deleting one is not reversible."""
-    _need(s, f"{run_id}/status.json")
+    st = reconcile(s, RunStatus.model_validate(
+        s.get_json(_need(s, f"{run_id}/status.json"))))
+    if st.state in ("queued", "running"):
+        raise HTTPException(409, "Wait for the run to finish before deleting it.")
     s.delete_prefix(run_id)
     return Response(status_code=204)
 

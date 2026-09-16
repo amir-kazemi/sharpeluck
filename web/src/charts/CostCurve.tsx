@@ -4,18 +4,26 @@ import { Frame, M, linear, padded, ticks, useWidth } from "./primitives";
 
 const HEIGHT = 280;
 
+function costPoints(audit: Audit) {
+  const pts = [...audit.cost_curve.points];
+  const { cost_bps, sharpe } = audit.winner;
+  // The stored grid may not include a user-selected cost such as 3 bps.
+  if (!pts.some((p) => p.cost_bps === cost_bps)) pts.push({ cost_bps, sharpe });
+  return pts.sort((a, b) => a.cost_bps - b.cost_bps);
+}
+
 /** Sharpe against assumed cost: where the edge dies, and how far that is from
  *  the cost actually charged in the backtest. */
 export function CostCurve({ audit }: { audit: Audit }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
 
-  const pts = audit.cost_curve.points.filter((p) => p.sharpe !== null) as
+  const pts = costPoints(audit).filter((p) => p.sharpe !== null) as
     { cost_bps: number; sharpe: number }[];
   const be = audit.cost_curve.break_even_bps;
   const assumed = audit.winner.cost_bps;
 
-  const xhi = Math.max(...pts.map((p) => p.cost_bps));
+  const xhi = Math.max(1, assumed, ...pts.map((p) => p.cost_bps));
   const x = linear(0, xhi, M.left, width - M.right);
   const [ylo, yhi] = padded(Math.min(0, ...pts.map((p) => p.sharpe)),
                             Math.max(0, ...pts.map((p) => p.sharpe)));
@@ -33,8 +41,9 @@ export function CostCurve({ audit }: { audit: Audit }) {
   };
 
   const h = hover === null ? null : pts[hover];
-  const atAssumed = pts.reduce((a, b) =>
-    Math.abs(b.cost_bps - assumed) < Math.abs(a.cost_bps - assumed) ? b : a, pts[0]);
+  const atAssumed = pts.find((p) => p.cost_bps === assumed);
+
+  if (!pts.length) return <div ref={ref} className="sub">Sharpe is undefined because returns have no variation.</div>;
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -60,10 +69,11 @@ export function CostCurve({ audit }: { audit: Audit }) {
                   fill="var(--series-1)" stroke="var(--surface-1)" strokeWidth={2} />
         ))}
         {/* One direct label, on the cost the backtest actually charged. */}
-        <text x={x(atAssumed.cost_bps)} y={y(atAssumed.sharpe) - 12} textAnchor="middle"
+        {atAssumed && <text x={Math.min(width - M.right - 55, Math.max(M.left + 55, x(atAssumed.cost_bps)))}
+              y={Math.max(M.top + 12, y(atAssumed.sharpe) - 12)} textAnchor="middle"
               fill="var(--text-secondary)" fontSize={11.5}>
           {atAssumed.sharpe.toFixed(2)} at {assumed} bps
-        </text>
+        </text>}
         <rect x={M.left} y={M.top} width={Math.max(0, width - M.right - M.left)}
               height={Math.max(0, HEIGHT - M.bottom - M.top)} fill="transparent"
               onMouseMove={onMove} onMouseLeave={() => setHover(null)} />
@@ -85,7 +95,7 @@ export function CostTable({ audit }: { audit: Audit }) {
     <table>
       <thead><tr><th>Assumed cost (bps)</th><th>Net Sharpe</th></tr></thead>
       <tbody>
-        {audit.cost_curve.points.map((p) => (
+        {costPoints(audit).map((p) => (
           <tr key={p.cost_bps}>
             <td>{p.cost_bps}</td>
             <td>{p.sharpe === null ? "—" : p.sharpe.toFixed(3)}</td>

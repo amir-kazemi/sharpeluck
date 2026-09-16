@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import polars as pl
 
-from alpha_audit.research.backtest import (
+from sharpeluck.research.backtest import (
     BacktestParams, WalkForward, compute_weights, metrics, pnl_series, run_trial, splits,
 )
 from tests.synth import prepared

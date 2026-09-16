@@ -1,15 +1,16 @@
 """Create, execute and finalise a run.
 
-`create` prepares the panel once and records the spec. `execute` fans the trials
-out across a local process pool -- the stand-in for an Azure queue plus
-Container Apps Jobs, which is why workers are handed a run id and a trial index
-rather than data. `finalise` assembles the trial table and runs the audit.
+`create` records the spec without loading data. On the worker node, `execute`
+prepares the panel and runs trials in a thread or process pool. `finalise`
+assembles the trial table and runs the audit. Job submission and monitoring
+live in jobs.py.
 """
 from __future__ import annotations
 
 import multiprocessing
 import os
 import secrets
+import socket
 import sys
 import traceback
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
@@ -18,7 +19,6 @@ from datetime import datetime, timezone
 import numpy as np
 import polars as pl
 
-from ..config import GOLD
 from ..ingest.silver import load_panel
 from ..research.audit import cost_curve, deflate, pbo, search_null
 from ..research.backtest import HOURS_PER_YEAR
@@ -26,7 +26,7 @@ from ..research.signals import prepare_panel
 from ..research.universe import build_universe
 from .spec import Provenance, RunSpec, RunStatus
 from .store import LocalStore, ResultStore
-from .worker import run_one
+from .worker import clear_panel, panel_for, run_one, set_panel
 
 # Bump when the shape of a run's stored artefacts changes. 1: initial.
 # 2: audit.json gained search_null (replacing reality_check). 3: pbo_cloud gained
@@ -34,7 +34,7 @@ from .worker import run_one
 # provenance.
 SCHEMA_VERSION = 4
 
-MAX_WORKERS = int(os.environ.get("ALPHA_AUDIT_WORKERS", "6"))
+MAX_WORKERS = int(os.environ.get("SHARPELUCK_WORKERS", "6"))
 
 # Threads by default, processes on request.
 #
@@ -51,8 +51,8 @@ MAX_WORKERS = int(os.environ.get("ALPHA_AUDIT_WORKERS", "6"))
 # releases the GIL for the work that matters here, so the fan-out is real.
 # On the Illinois Campus Cluster the honest way to use many cores is Slurm,
 # not a login-node pool.
-EXECUTOR = os.environ.get("ALPHA_AUDIT_EXECUTOR", "thread")
-POLARS_THREADS = os.environ.get("ALPHA_AUDIT_POLARS_THREADS", "2")
+EXECUTOR = os.environ.get("SHARPELUCK_EXECUTOR", "thread")
+POLARS_THREADS = os.environ.get("SHARPELUCK_POLARS_THREADS", "2")
 
 
 def _now() -> str:
@@ -78,16 +78,14 @@ def _provenance(panel: pl.DataFrame, rules) -> Provenance:
 def create(spec: RunSpec, store: ResultStore, panel: pl.DataFrame | None = None) -> RunStatus:
     run_id = f"{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{secrets.token_hex(2)}"
     trials = spec.trials()
-    rules = spec.universe.to_rules()
-    if panel is None:
-        # The universe is rebuilt per run from silver rather than read from a
-        # pre-baked file, because it is now part of the experiment.
-        bars = load_panel()
-        panel = prepare_panel(bars, build_universe(bars, rules), rules)
-    prov = _provenance(panel, rules)
-    store.put_table(f"{run_id}/panel.parquet", panel)
+    # A supplied panel is useful to tests and offline callers. Normal API
+    # submission only writes small JSON files; preparation belongs to the job.
+    prov = None
+    if panel is not None:
+        prov = _provenance(panel, spec.universe.to_rules())
+        store.put_table(f"{run_id}/panel.parquet", panel)
     store.put_json(f"{run_id}/spec.json", spec.model_dump())
-    st = RunStatus(run_id=run_id, state="queued", n_trials=len(trials),
+    st = RunStatus(run_id=run_id, state="queued", phase="queued", n_trials=len(trials),
                    label=spec.label, created_at=_now(),
                    schema_version=SCHEMA_VERSION, provenance=prov)
     store.put_json(f"{run_id}/status.json", st.model_dump())
@@ -125,19 +123,44 @@ def _pool():
 def execute(run_id: str, store: ResultStore) -> RunStatus:
     st = _status(store, run_id)
     spec = RunSpec.model_validate(store.get_json(f"{run_id}/spec.json"))
-    st.state = "running"
+    st.state, st.phase = "running", "preparing"
+    st.node = socket.gethostname()
+    st.pid = os.getpid()
+    st.job_id = os.environ.get("SLURM_JOB_ID")
+    st.backend = "slurm" if st.job_id else "local"
+    st.error, st.finished_at, st.n_done = None, None, 0
     _save(store, st)
     try:
+        if store.exists(f"{run_id}/panel.parquet"):
+            panel = panel_for(store, run_id)
+        else:
+            rules = spec.universe.to_rules()
+            bars = load_panel()
+            panel = prepare_panel(bars, build_universe(bars, rules), rules)
+            del bars
+            if panel.height < 2 or not panel["in_universe"].any():
+                raise ValueError("No tradable data for this universe. Lower the liquidity or history requirements, or ingest more data.")
+            store.put_table(f"{run_id}/panel.parquet", panel)
+            set_panel(run_id, panel)
+        st.provenance = _provenance(panel, spec.universe.to_rules())
+        del panel
+        st.phase = "trials"
+        _save(store, st)
         with _pool() as ex:
             futs = [ex.submit(_one, run_id, t.trial) for t in spec.trials()]
             for f in as_completed(futs):
                 f.result()
                 st.n_done += 1
                 _save(store, st)
+        st.phase = "audit"
+        _save(store, st)
+        clear_panel(run_id)
         finalise(run_id, store)
-        st.state, st.finished_at = "done", _now()
+        st.state, st.phase, st.finished_at = "done", "done", _now()
     except Exception:
-        st.state, st.error, st.finished_at = "failed", traceback.format_exc(), _now()
+        st.state, st.phase, st.error, st.finished_at = "failed", "failed", traceback.format_exc(), _now()
+    finally:
+        clear_panel(run_id)
     _save(store, st)
     return st
 
@@ -205,10 +228,12 @@ def finalise(run_id: str, store: ResultStore) -> dict:
 
 
 def main() -> int:
-    """`python -m alpha_audit.runner.dispatch <run_id>` -- what the API launches
+    """`python -m sharpeluck.runner.dispatch <run_id>` -- what the API launches
     locally, and what a queue message triggers in the cloud."""
-    execute(sys.argv[1], LocalStore())
-    return 0
+    done = execute(sys.argv[1], LocalStore())
+    if done.error:
+        print(done.error, file=sys.stderr, flush=True)
+    return 0 if done.state == "done" else 1
 
 
 if __name__ == "__main__":

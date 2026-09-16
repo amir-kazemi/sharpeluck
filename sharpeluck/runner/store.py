@@ -39,12 +39,12 @@ class LocalStore(ResultStore):
     def __init__(self, root: Path | None = None):
         # Env-configurable so a forked worker lands in the same store as its
         # dispatcher, and so tests can point the whole runner at a tmpdir.
-        self.root = Path(root or os.environ.get("ALPHA_AUDIT_RUNS_ROOT") or GOLD / "runs")
+        self.root = Path(root or os.environ.get("SHARPELUCK_RUNS_ROOT") or GOLD / "runs")
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _p(self, key: str) -> Path:
         p = (self.root / key).resolve()
-        if not str(p).startswith(str(self.root.resolve())):
+        if not p.is_relative_to(self.root.resolve()):
             raise ValueError(f"key escapes the store root: {key!r}")
         return p
 
@@ -83,7 +83,7 @@ class LocalStore(ResultStore):
         """Remove a whole run. Each run stores its own copy of the prepared
         panel, so they are tens of megabytes each and worth clearing out."""
         base = self._p(prefix)
-        if base == self.root or not base.exists():
+        if base == self.root.resolve() or not base.exists():
             return 0
         n = sum(1 for p in base.rglob("*") if p.is_file())
         shutil.rmtree(base)

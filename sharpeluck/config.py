@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DATA_ROOT = Path(os.environ.get("ALPHA_AUDIT_DATA", REPO_ROOT / "data")).resolve()
+DATA_ROOT = Path(os.environ.get("SHARPELUCK_DATA", REPO_ROOT / "data")).resolve()
 
 BRONZE = DATA_ROOT / "bronze"
 SILVER = DATA_ROOT / "silver"

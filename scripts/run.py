@@ -14,9 +14,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from alpha_audit.runner.dispatch import create, execute
-from alpha_audit.runner.spec import RunSpec, UniverseSpec
-from alpha_audit.runner.store import LocalStore
+from sharpeluck.runner.dispatch import create, execute
+from sharpeluck.runner.spec import RunSpec, UniverseSpec
+from sharpeluck.runner.store import LocalStore
 
 DEFAULT_GRIDS = [
     "cs_zscore(ts_ret(close, [12, 24, 72, 168, 336]))",
@@ -44,15 +44,16 @@ def main() -> int:
     )
     st = create(spec, store)
     print(f"run {st.run_id}: {st.n_trials} trials")
-    if st.provenance:
-        pv = st.provenance
-        print(f"  data   {pv.start[:10]} -> {pv.end[:10]}  {pv.n_bars:,} bars  "
-              f"{pv.n_symbols_traded}/{pv.n_symbols_available} pairs traded  "
-              f"~{pv.mean_universe_size:.0f} held per bar")
     done = execute(st.run_id, store)
     if done.state != "done":
         print(done.error, file=sys.stderr)
         return 1
+
+    if done.provenance:
+        pv = done.provenance
+        print(f"  data   {pv.start[:10]} -> {pv.end[:10]}  {pv.n_bars:,} bars  "
+              f"{pv.n_symbols_traded}/{pv.n_symbols_available} pairs traded  "
+              f"~{pv.mean_universe_size:.0f} held per bar")
 
     r = store.get_json(f"{st.run_id}/audit.json")
     d, pb, sn = r["deflation"], r["pbo"], r["search_null"]

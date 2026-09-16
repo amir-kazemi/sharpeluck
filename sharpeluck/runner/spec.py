@@ -6,6 +6,8 @@ remembered.
 """
 from __future__ import annotations
 
+from typing import Annotated
+
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ..research import dsl
@@ -64,12 +66,12 @@ class RunSpec(BaseModel):
         default=["{}", "neg({})"],
         description="Sign is a searched dimension and is counted in the trial budget.",
     )
-    rebalances: list[int] = [6, 24]
-    cost_bps: float = 5.0
-    n_splits: int = 6          # walk-forward folds
-    n_blocks: int = 10         # CSCV blocks -> C(n, n/2) splits
-    n_boot: int = 2000
-    mean_block_h: float = 48.0
+    rebalances: list[Annotated[int, Field(ge=1, le=24)]] = Field(default=[6, 24], min_length=1)
+    cost_bps: float = Field(default=5.0, ge=0, allow_inf_nan=False)
+    n_splits: int = Field(default=6, ge=2)       # walk-forward folds
+    n_blocks: int = Field(default=10, ge=2)      # CSCV blocks -> C(n, n/2) splits
+    n_boot: int = Field(default=2000, ge=1)
+    mean_block_h: float = Field(default=48.0, ge=1, allow_inf_nan=False)
     universe: UniverseSpec = Field(default_factory=UniverseSpec)
     label: str | None = None
 
@@ -88,6 +90,25 @@ class RunSpec(BaseModel):
         for s in v:
             if "{}" not in s:
                 raise ValueError(f"sign template {s!r} must contain '{{}}'")
+            try:
+                expr = s.format("close")
+            except (IndexError, KeyError, ValueError) as exc:
+                raise ValueError(f"invalid sign template: {s!r}") from exc
+            dsl.parse(expr)
+        return v
+
+    @field_validator("rebalances")
+    @classmethod
+    def _daily_intervals(cls, v: list[int]) -> list[int]:
+        if any(24 % h for h in v):
+            raise ValueError("rebalance intervals must divide 24 hours evenly")
+        return v
+
+    @field_validator("n_blocks")
+    @classmethod
+    def _even_blocks(cls, v: int) -> int:
+        if v % 2:
+            raise ValueError("n_blocks must be even for half-sample splits")
         return v
 
     @model_validator(mode="after")
@@ -133,6 +154,11 @@ class RunStatus(BaseModel):
     # PID of a locally-launched dispatcher, so a run whose worker died can be
     # told apart from one still going. None when an external scheduler owns it.
     pid: int | None = None
+    backend: str | None = None
+    job_id: str | None = None
+    node: str | None = None
+    phase: str | None = None      # queued | preparing | trials | audit | done | failed
+    queue_reason: str | None = None
     state: str                 # queued | running | done | failed
     n_trials: int
     n_done: int = 0

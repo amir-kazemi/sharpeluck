@@ -1,6 +1,7 @@
 """The audit layer: what survives the fact that you looked N times.
 
-Four independent tests, plus the quantities they are built from.
+Three statistical checks, a cost-sensitivity curve, and their diagnostics.
+The checks are not statistically independent.
 
   deflate()        Deflated Sharpe Ratio (Bailey & Lopez de Prado 2014).
                    Discounts the best observed Sharpe by the Sharpe you would
@@ -43,7 +44,7 @@ _PHI_INV = _N.inv_cdf
 # --------------------------------------------------------------------------
 # Deflated Sharpe Ratio
 # --------------------------------------------------------------------------
-def expected_max_sharpe(n_trials: int, sr_std: float) -> float:
+def expected_max_sharpe(n_trials: float, sr_std: float) -> float:
     """E[max of N iid Sharpe ratios drawn from N(0, sr_std^2)].
 
     This is the benchmark a searched strategy has to beat: not zero, but the
@@ -302,8 +303,9 @@ def reality_check(
 ) -> RealityCheck:
     """H0: the best of N trials has no edge over a zero benchmark.
 
-    Studentised statistic (Hansen's variant), which stops a high-vol trial from
-    drowning out a low-vol one:  V = max_k sqrt(T) * mean_k / sd_k.
+    Standardized maximum statistic: V = max_k sqrt(T) * mean_k / sd_k.
+    Uses original sample standard deviations, not long-run variance estimates;
+    this is not Hansen's full SPA test.
     """
     m = np.nan_to_num(np.asarray(returns, dtype=float), nan=0.0)
     t = m.shape[0]
@@ -335,13 +337,13 @@ def effective_n_trials(sr0: float, sr_null_std: float) -> float:
     if expected_max_sharpe(2, sr_null_std) > sr0:
         return 1.0
     lo = hi = 2.0
-    while expected_max_sharpe(int(hi), sr_null_std) < sr0 and hi < 1e7:
+    while expected_max_sharpe(hi, sr_null_std) < sr0 and hi < 1e7:
         lo, hi = hi, hi * 2.0
     if hi >= 1e7:
         return float(hi)
     for _ in range(60):                        # monotone in N, so bisection
         mid = 0.5 * (lo + hi)
-        if expected_max_sharpe(int(round(mid)), sr_null_std) < sr0:
+        if expected_max_sharpe(mid, sr_null_std) < sr0:
             lo = mid
         else:
             hi = mid

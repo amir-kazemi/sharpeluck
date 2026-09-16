@@ -12,7 +12,7 @@ import urllib.error
 
 import pytest
 
-from alpha_audit.ingest import binance_bulk as bb
+from sharpeluck.ingest import binance_bulk as bb
 
 
 class _Resp:
