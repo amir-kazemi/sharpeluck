@@ -1,0 +1,11 @@
+.git
+data
+web
+slurm
+tests
+scripts
+env
+.venv
+__pycache__
+*.pyc
+.pytest_cache

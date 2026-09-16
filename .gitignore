@@ -11,3 +11,7 @@ dist/
 .env
 node_modules/.cache
 slurm/logs/*.out
+
+# ...except the handful of served artefacts the deployed image ships with.
+!results/
+!results/**

@@ -1,0 +1,26 @@
+{
+  "grids": [
+    "cs_zscore(ts_std(ret, [24, 72, 168]))"
+  ],
+  "signs": [
+    "{}",
+    "neg({})"
+  ],
+  "rebalances": [
+    6,
+    24
+  ],
+  "cost_bps": 2.0,
+  "n_splits": 6,
+  "n_blocks": 10,
+  "n_boot": 2000,
+  "mean_block_h": 48.0,
+  "universe": {
+    "max_symbols": 50,
+    "min_adv_usd": 100000.0,
+    "min_history_h": 720,
+    "min_coverage": 0.9,
+    "rebalance_every_h": 24
+  },
+  "label": "low volatility cost 2 bps grid 2"
+}

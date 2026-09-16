@@ -68,9 +68,12 @@ class RunSpec(BaseModel):
     )
     rebalances: list[Annotated[int, Field(ge=1, le=24)]] = Field(default=[6, 24], min_length=1)
     cost_bps: float = Field(default=5.0, ge=0, allow_inf_nan=False)
-    n_splits: int = Field(default=6, ge=2)       # walk-forward folds
-    n_blocks: int = Field(default=10, ge=2)      # CSCV blocks -> C(n, n/2) splits
-    n_boot: int = Field(default=2000, ge=1)
+    # Upper bounds are not taste, they are a denial-of-service fix: CSCV runs
+    # C(n_blocks, n_blocks/2) splits, so n_blocks=30 is 155 million of them from
+    # one well-formed request. C(16, 8) = 12,870 is already a long run.
+    n_splits: int = Field(default=6, ge=2, le=24)       # walk-forward folds
+    n_blocks: int = Field(default=10, ge=2, le=16)      # CSCV blocks -> C(n, n/2) splits
+    n_boot: int = Field(default=2000, ge=1, le=20_000)
     mean_block_h: float = Field(default=48.0, ge=1, allow_inf_nan=False)
     universe: UniverseSpec = Field(default_factory=UniverseSpec)
     label: str | None = None

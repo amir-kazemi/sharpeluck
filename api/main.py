@@ -21,6 +21,12 @@ from sharpeluck.runner.store import LocalStore, ResultStore
 # on writes only, is the whole authorisation model -- see the README.
 WRITE_TOKEN = os.environ.get("SHARPELUCK_TOKEN")
 
+# The dev servers are always allowed; deployments add their own origin, because
+# the frontend is served from a different host than the API.
+ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"] + [
+    o.strip() for o in os.environ.get("SHARPELUCK_ORIGINS", "").split(",") if o.strip()
+]
+
 app = FastAPI(
     title="SharpeLuck",
     summary="Is your crypto strategy just lucky?",
@@ -28,7 +34,7 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
