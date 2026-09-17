@@ -26,6 +26,9 @@ jobs:
           # The API is a separate service, so the frontend needs its absolute
           # address baked in at build time -- there is no same-origin /api here.
           VITE_API_BASE: https://sharpeluck-api.wittymeadow-a3b7b897.centralus.azurecontainerapps.io
+          # Not a secret: it reaches every visitor in the bundle, and it only
+          # permits writing telemetry, never reading it.
+          VITE_APPINSIGHTS_CONNECTION_STRING: InstrumentationKey=b649ceb3-bb53-471a-b401-ef5d1ad6af01;IngestionEndpoint=https://centralus-2.in.applicationinsights.azure.com/;LiveEndpoint=https://centralus.livediagnostics.monitor.azure.com/;ApplicationId=6411f594-afd7-455f-8a26-b602b22f4f5e
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_RED_POND_06E2FE210 }}
           repo_token: ${{ secrets.GITHUB_TOKEN }} # Used for Github integrations (i.e. PR comments)
