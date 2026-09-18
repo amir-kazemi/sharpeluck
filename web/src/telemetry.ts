@@ -33,12 +33,24 @@ export function startTelemetry(): void {
   });
   ai.loadAppInsights();
 
+  // Where the visitor came from. Only the first view of a session carries a
+  // referrer -- once they are clicking around inside the app, the referrer is
+  // this app. Cross-origin referrers are trimmed to the origin by the sending
+  // site, so GitHub arrives as "https://github.com/", not the exact page.
+  const referrer = document.referrer || "(direct)";
+  let first = true;
+
   let last = "";
   const track = () => {
     const name = currentPage();
     if (name === last) return;          // hashchange fires on identical hashes
     last = name;
-    ai.trackPageView({ name, uri: name });
+    ai.trackPageView({
+      name,
+      uri: name,
+      properties: { referrer: first ? referrer : "(internal)" },
+    });
+    first = false;
   };
 
   track();
